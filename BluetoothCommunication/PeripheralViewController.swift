@@ -58,8 +58,10 @@ class PeripheralViewController: UIViewController {
     
     var transferCharacteristic: CBMutableCharacteristic?
     var connectedCentral: CBCentral?
+    
     var dataToSend = Data()
     var dataToReceive = Data()
+    
     var sendDataIndex: Int = 0
 }
 
@@ -80,7 +82,7 @@ extension PeripheralViewController {
         
         // Start with the CBMutableCharacteristic.
         let transferCharacteristic = CBMutableCharacteristic(type: TransferService.characteristicUUID,
-                                                             properties: [.notify, .writeWithoutResponse],
+                                                             properties: [.indicate, .write, .read],
                                                              value: nil,
                                                              permissions: [.readable, .writeable])
         
@@ -101,7 +103,8 @@ extension PeripheralViewController {
     }
     
     private func startAdvertising() {
-        peripheralManager.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [TransferService.serviceUUID]])
+        peripheralManager.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [TransferService.serviceUUID],
+                                               CBAdvertisementDataLocalNameKey: TransferService.peripheralName])
     }
     
     private func stopAdvertising() {
