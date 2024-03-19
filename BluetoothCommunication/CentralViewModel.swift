@@ -218,21 +218,24 @@ extension CentralViewModel: CBCentralManagerDelegate {
         print("Discovered \(peripheral.name ?? "unknown name") at \(RSSI)")
         if discoveredPeripheral != peripheral {
             discoveredPeripheral = peripheral
-        
+        }
+        if peripheral.state == .disconnected {
             log.verbose("Connecting to peripheral \(peripheral)")
             centralManager.connect(peripheral, options: nil)
-            
-            //CBConnectPeripheralOptionNotifyOnConnectionKey            //6+
-            //CBConnectPeripheralOptionNotifyOnDisconnectionKey         //5+
-            //CBConnectPeripheralOptionNotifyOnNotificationKey          //6+
-            //CBConnectPeripheralOptionEnableTransportBridgingKey       //13+
-            //CBConnectPeripheralOptionRequiresANCS                     //13+
-            //CBConnectPeripheralOptionStartDelayKey                    //6+
-            //CBConnectPeripheralOptionEnableAutoReconnect              //17+
-            
-            //iOS 17 이하에서 자동으로 연결하는 것은 로직으로 해야 함.
-            //DisconnectionKey을 사용해서 처리하는 방향으로 해야 함.
+        } else {
+            log.verbose("peripheral state = \(peripheral.state)")
         }
+        
+        //CBConnectPeripheralOptionNotifyOnConnectionKey            //6+
+        //CBConnectPeripheralOptionNotifyOnDisconnectionKey         //5+
+        //CBConnectPeripheralOptionNotifyOnNotificationKey          //6+
+        //CBConnectPeripheralOptionEnableTransportBridgingKey       //13+
+        //CBConnectPeripheralOptionRequiresANCS                     //13+
+        //CBConnectPeripheralOptionStartDelayKey                    //6+
+        //CBConnectPeripheralOptionEnableAutoReconnect              //17+
+        
+        //iOS 17 이하에서 자동으로 연결하는 것은 로직으로 해야 함.
+        //DisconnectionKey을 사용해서 처리하는 방향으로 해야 함.
     }
     
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
@@ -270,9 +273,17 @@ extension CentralViewModel: CBCentralManagerDelegate {
 extension CentralViewModel: CBPeripheralDelegate {
     //서비스가 무효화되었을 때 이를 알려주는 주변 장치입니다.
     func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService]) {
+        log.verbose("didModifyServices: \(peripheral)")
+        
+        var invalidated: Bool = false
         for service in invalidatedServices where service.uuid == TransferService.serviceUUID {
             log.verbose("Transfer service is invalidated - rediscover services")
             peripheral.discoverServices([TransferService.serviceUUID])
+            invalidated = true
+        }
+        
+        if invalidated == true {
+            centralManager.cancelPeripheralConnection(peripheral)
         }
     }
     
@@ -291,7 +302,7 @@ extension CentralViewModel: CBPeripheralDelegate {
             return
         }
         
-        log.verbose("discoverCharacteristics")
+        log.verbose("CALL peripheral.discoverCharacteristics")
         
         for service in peripheralServices {
             peripheral.discoverCharacteristics([TransferService.characteristicUUID], for: service)
@@ -351,7 +362,7 @@ extension CentralViewModel: CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor descriptor: CBDescriptor, error: Error?) {
-        
+        log.verbose("")
     }
     
     //주변 장치가 지정된 특성의 값에 대한 알림을 시작하거나 중단하라는 요청을 받았다고 대리인에게 알려줍니다.
