@@ -10,12 +10,33 @@ import CoreBluetooth
 import RxSwift
 import RxCocoa
 
-enum BluetoothState {
+enum BluetoothState: String {
+    case recovery
+    case reconnecting
     case scanning
+    case didDiscoverService
+    case didDiscoverCharacteristic
+    case failToConnected
     case connected
+    case subscribing
+    case waitingReceiveData
+    case receivingEmptyData
     case receivingData
+    case receivingDescriptor
+    case receiveCompleted
     case sendingData
     case disconnected
+}
+
+enum CentralError: Error {
+    case unknownService
+    case unknownCharacteristic
+    case unknownDescriptor
+    case notReadyPeripheral
+    case emptyService
+    case emptyCharacteristic
+    case emptyDescriptor
+    case unknown(String)
 }
 
 class CentralViewModel: NSObject {
@@ -23,7 +44,11 @@ class CentralViewModel: NSObject {
     
     private var connectedSubject: PublishSubject<BluetoothState> = .init()
     private var receiveDataSubject: PublishSubject<Data> = .init()
-    private var errorSubject: PublishSubject<Error> = .init()
+    private var errorSubject: PublishSubject<CentralError> = .init()
+    
+    private var serviceInfoSubject: PublishSubject<String> = .init()
+    private var characteristicInfoSubject: PublishSubject<String> = .init()
+    private var descriptorInfoSubject: PublishSubject<String> = .init()
     
     public var connected: Observable<BluetoothState> {
         connectedSubject.asObservable()
@@ -31,13 +56,30 @@ class CentralViewModel: NSObject {
     public var receivedData: Observable<Data> {
         receiveDataSubject.asObservable()
     }
-    public var error: Observable<Error> {
+    public var error: Observable<CentralError> {
         errorSubject.asObservable()
+    }
+    public var serviceInfo: Observable<String> {
+        serviceInfoSubject.asObservable()
+    }
+    public var characteristicInfo: Observable<String> {
+        characteristicInfoSubject.asObservable()
+    }
+    public var descriptorInfo: Observable<String> {
+        descriptorInfoSubject.asObservable()
+    }
+    
+    func ready() {
+        serviceInfoSubject.onNext("")
+        characteristicInfoSubject.onNext("")
+        descriptorInfoSubject.onNext("")
     }
     
     func send(data: Data) {
         //TODO: 연결된 상태가 되었을 때 보내야 함.
+        dataToSend.removeAll(keepingCapacity: false)
         dataToSend.append(data)
+        writeData()
     }
     
     private var centralManager: CBCentralManager!
@@ -89,6 +131,8 @@ extension CentralViewModel {
         centralManager.stopScan()
         log.info("Scanning stopped")
         
+        connectedSubject.onNext(.disconnected)
+        
         dataToSend.removeAll(keepingCapacity: false)
         dataToReceive.removeAll(keepingCapacity: false)
     }
@@ -105,11 +149,13 @@ extension CentralViewModel {
         log.verbose("Found connected Peripherals with transfer service: \(connectedPeripherals)")
         
         if let connectedPeripheral = connectedPeripherals.last {
+            connectedSubject.onNext(.connected)
             log.verbose("Connecting to peripheral \(connectedPeripheral)")
 
             discoveredPeripheral = connectedPeripheral
             centralManager.connect(connectedPeripheral, options: nil)
         } else {
+            connectedSubject.onNext(.scanning)
             log.verbose("Scan for Peripherals")
             // We were not connected to our counterpart, so start scanning
             centralManager.scanForPeripherals(withServices: [TransferService.serviceUUID],
@@ -129,18 +175,31 @@ extension CentralViewModel {
         
         peripheral.cleanUp()
         centralManager.cancelPeripheralConnection(peripheral)
+        
+        connectedSubject.onNext(.disconnected)
     }
     
     // 주변 장치에 일부 테스트 데이터 쓰기
     private func writeData() {
-        guard let peripheral = discoveredPeripheral,
-                let transferCharacteristic = transferCharacteristic else {
+        guard let peripheral = discoveredPeripheral else {
+            log.error("peripheral is not ready.")
+            errorSubject.onNext(.notReadyPeripheral)
             return
         }
+        
+        guard let transferCharacteristic = transferCharacteristic else {
+            log.error("Characteristic is not ready.")
+            errorSubject.onNext(.emptyCharacteristic)
+            return
+        }
+        
+        log.info("peripheral.state = \(peripheral.state)")
         
         guard let data = dataToSend.last else {
             return
         }
+        
+        connectedSubject.onNext(.sendingData)
         
         // 완료된 반복 횟수와 주변 장치가 더 많은 데이터를 수용할 수 있는지 확인하십시오.
         peripheral.write(data: data, characteristic: transferCharacteristic)
@@ -193,6 +252,8 @@ extension CentralViewModel: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {
+        connectedSubject.onNext(.recovery)
+        
         // 이전에 연결된 주변 장치 복원
         if let restoredPeripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] {
             // 처리 코드 작성
@@ -219,7 +280,9 @@ extension CentralViewModel: CBCentralManagerDelegate {
         if discoveredPeripheral != peripheral {
             discoveredPeripheral = peripheral
         }
+        
         if peripheral.state == .disconnected {
+            connectedSubject.onNext(.reconnecting)
             log.verbose("Connecting to peripheral \(peripheral)")
             centralManager.connect(peripheral, options: nil)
         } else {
@@ -239,13 +302,17 @@ extension CentralViewModel: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        connectedSubject.onNext(.failToConnected)
+        
         log.warning("Failed to connect to \(peripheral). \(String(describing: error))")
-
+        
         cleanup()
     }
     
     //주변기기와 연결했으니 이제 '전송' 특성을 찾기 위해 서비스와 특성을 찾아야 합니다.
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        connectedSubject.onNext(.connected)
+        
         log.verbose("Peripheral Connected")
         
         centralManager.stopScan()
@@ -263,6 +330,7 @@ extension CentralViewModel: CBCentralManagerDelegate {
     //연결이 끊어지면 주변 장치의 로컬 복사본을 정리해야 합니다.
     //5+
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        connectedSubject.onNext(.disconnected)
         log.verbose("didDisconnectPeripheral: \(peripheral)")
         
         //연결이 끊어졌으니 다시 스캔을 시작하세요
@@ -299,13 +367,19 @@ extension CentralViewModel: CBPeripheralDelegate {
         
         //둘 이상이 있을 경우를 대비하여 새로 채워진 Peripheral.services 배열을 반복합니다.
         guard let peripheralServices = peripheral.services else {
+            errorSubject.onNext(.emptyService)
             return
         }
+        
+        connectedSubject.onNext(.didDiscoverService)
         
         log.verbose("CALL peripheral.discoverCharacteristics")
         
         for service in peripheralServices {
             peripheral.discoverCharacteristics([TransferService.characteristicUUID], for: service)
+            
+            log.verbose("service = \(service)")
+            serviceInfoSubject.onNext("\(service.uuid)")
             
             if let characteristics = service.characteristics {
                 log.verbose("service.characteristics = \(characteristics)")
@@ -322,21 +396,40 @@ extension CentralViewModel: CBPeripheralDelegate {
             return
         }
         
+        connectedSubject.onNext(.didDiscoverCharacteristic)
+        
         //다시 한 번, 만약을 대비해 배열을 반복하고 그것이 올바른지 확인합니다.
         guard let serviceCharacteristics = service.characteristics else {
+            errorSubject.onNext(.emptyCharacteristic)
             return
         }
-        
-        
+
         for characteristic in serviceCharacteristics {
-            if characteristic.uuid == TransferService.characteristicUUID {   
+            if characteristic.uuid == TransferService.characteristicUUID {
                 //TODO: 찾는게 나오면 구독하는 처리를 여기서 할 것.
                 transferCharacteristic = characteristic
+                characteristicInfoSubject.onNext("\(characteristic.uuid)")
                 peripheral.setNotifyValue(true, for: characteristic)
+                connectedSubject.onNext(.subscribing)
+                
+                peripheral.discoverDescriptors(for: characteristic)
             }
         }
         
         //이 작업이 완료되면 데이터가 들어올 때까지 기다리면 됩니다.
+        connectedSubject.onNext(.waitingReceiveData)
+    }
+    
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverDescriptorsFor characteristic: CBCharacteristic, error: (any Error)?) {
+        guard let descriptors = characteristic.descriptors else { return }
+        for descriptor in descriptors {
+            // 여기서 descriptor 객체를 사용할 수 있습니다.
+            // 예: descriptor 읽기
+            peripheral.readValue(for: descriptor)
+            
+            log.verbose("descriptor = \(descriptor)")
+            connectedSubject.onNext(.receivingDescriptor)
+        }
     }
     
 //완료.
@@ -348,6 +441,7 @@ extension CentralViewModel: CBPeripheralDelegate {
         }
         
         guard let characteristicData = characteristic.value else {
+            connectedSubject.onNext(.receivingEmptyData)
             return
         }
         
@@ -356,19 +450,25 @@ extension CentralViewModel: CBPeripheralDelegate {
         
         //메시지 끝 토큰을 받게 되면
         if stringFromData == "EOM" {
+            connectedSubject.onNext(.receiveCompleted)
             //이 메서드가 어느 스레드에서 다시 호출될지 모르기 때문에 UI 업데이트를 위해 텍스트 보기 업데이트를 기본 대기열로 전달합니다.
             //Rx로 처리하므로, observer쪽에서 메인쓰레드로 바꾸면 될 듯.
             receiveDataSubject.onNext(self.dataToReceive)
 
             dataToReceive.removeAll(keepingCapacity: false)
         } else {
+            connectedSubject.onNext(.receivingData)
             //그렇지 않으면 이전에 받은 데이터에 데이터를 추가하면 됩니다.
             dataToReceive.append(characteristicData)
         }
     }
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor descriptor: CBDescriptor, error: Error?) {
-        log.verbose("")
+        connectedSubject.onNext(.receivingDescriptor)
+        
+        descriptorInfoSubject.onNext("\(descriptor.uuid)")
+        
+        log.verbose("didUpdateValueFor descriptor: \(descriptor)")
     }
     
     //주변 장치가 지정된 특성의 값에 대한 알림을 시작하거나 중단하라는 요청을 받았다고 대리인에게 알려줍니다.
@@ -381,6 +481,7 @@ extension CentralViewModel: CBPeripheralDelegate {
         // 전송 특성이 아닐 경우 종료
         guard TransferService.characteristicUUID == characteristic.uuid else {
             //해당되는 특성이 아니므로, clean할 필요는 없다.
+            errorSubject.onNext(.unknownCharacteristic)
             return
         }
         
