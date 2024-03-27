@@ -9,6 +9,7 @@ import UIKit
 import RxSwift
 import RxCocoa
 import Toast
+import RxMediaPicker
 
 class CentralViewController: UIViewController {
     private let disposeBag = DisposeBag()
@@ -19,12 +20,16 @@ class CentralViewController: UIViewController {
     @IBOutlet weak var serviceStatusLabel: UILabel!
     @IBOutlet weak var characteristicStatusLabel: UILabel!
     @IBOutlet weak var desciptorStatusLabel: UILabel!
-    
     @IBOutlet weak var receivedDataLabel: UILabel!
     
     //TEST - echo: 0x24, 0xBF, 0x01, 0x01, 0x3D, 0x05 (body length), body data
     
     @IBOutlet weak var test1Button: UIButton!
+    @IBOutlet weak var test2Button: UIButton!
+    
+    lazy var picker: RxMediaPicker = {
+        RxMediaPicker(delegate: self)
+    }()
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -79,6 +84,31 @@ class CentralViewController: UIViewController {
                     self.viewModel.send(data: data)
                 }
             }).disposed(by: disposeBag)
+        
+        test2Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
+            .subscribe(onNext: { _ in
+                self.selectImage()
+            }).disposed(by: disposeBag)
+    }
+}
+
+extension CentralViewController: RxMediaPickerDelegate {
+    func present(picker: UIImagePickerController) {
+        present(picker, animated: true)
+    }
+    
+    func dismiss(picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
+    }
+    
+    func selectImage() {
+        picker.selectImage().subscribe(onNext: { (image, editedImage) in
+            var image = editedImage != nil ? editedImage : image
+            
+            if let data = image?.jpegData(compressionQuality: 0.7) {
+                self.viewModel.send(data: data)
+            }
+        }).disposed(by: disposeBag)
     }
 }
 

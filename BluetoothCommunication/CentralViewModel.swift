@@ -77,8 +77,14 @@ class CentralViewModel: NSObject {
     
     func send(data: Data) {
         //TODO: 연결된 상태가 되었을 때 보내야 함.
+        guard let peripheral = discoveredPeripheral,
+              peripheral.state == .connected else {
+            return
+        }
+        
         dataToSend.removeAll(keepingCapacity: false)
         dataToSend.append(data)
+        
         writeData()
     }
     

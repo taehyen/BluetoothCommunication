@@ -142,12 +142,12 @@
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="JGn-Wa-FMS">
                                                         <rect key="frame" x="0.0" y="0.0" width="186.66666666666666" height="34.333333333333336"/>
                                                         <state key="normal" title="Button"/>
-                                                        <buttonConfiguration key="configuration" style="plain" title="send: &quot;test string&quot;"/>
+                                                        <buttonConfiguration key="configuration" style="plain" title="&quot;test string&quot;"/>
                                                     </button>
                                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="FkN-gU-2Ha">
                                                         <rect key="frame" x="186.66666666666663" y="0.0" width="186.33333333333337" height="34.333333333333336"/>
                                                         <state key="normal" title="Button"/>
-                                                        <buttonConfiguration key="configuration" style="plain" title="Button"/>
+                                                        <buttonConfiguration key="configuration" style="plain" title="select &amp; image"/>
                                                     </button>
                                                 </subviews>
                                             </stackView>
@@ -253,6 +253,7 @@
                         <outlet property="receivedDataLabel" destination="wAl-Zf-eIV" id="99O-Ze-fds"/>
                         <outlet property="serviceStatusLabel" destination="lgE-1M-Wdv" id="dGX-Ut-cz6"/>
                         <outlet property="test1Button" destination="JGn-Wa-FMS" id="qAa-bQ-qN9"/>
+                        <outlet property="test2Button" destination="FkN-gU-2Ha" id="nAw-lT-A6Q"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="Ief-a0-LHa" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
