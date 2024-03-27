@@ -81,7 +81,7 @@ class CentralViewController: UIViewController {
             .subscribe(onNext: { _ in
                 if let data = "test string".data(using: .utf8) {
                     self.view.makeToast("send : test string")
-                    self.viewModel.send(data: data)
+                    self.viewModel.send(data: .text(data))
                 }
             }).disposed(by: disposeBag)
         
@@ -103,10 +103,13 @@ extension CentralViewController: RxMediaPickerDelegate {
     
     func selectImage() {
         picker.selectImage().subscribe(onNext: { (image, editedImage) in
-            var image = editedImage != nil ? editedImage : image
+            guard let image = editedImage != nil ? editedImage : image else {
+                log.error("all images is nil")
+                return
+            }
             
-            if let data = image?.jpegData(compressionQuality: 0.7) {
-                self.viewModel.send(data: data)
+            if let data = image.jpegData(compressionQuality: 0.7) {
+                self.viewModel.send(data: .image(data))
             }
         }).disposed(by: disposeBag)
     }

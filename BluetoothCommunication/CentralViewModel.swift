@@ -10,7 +10,7 @@ import CoreBluetooth
 import RxSwift
 import RxCocoa
 
-enum BluetoothState: String {
+enum BluetoothCentralState: String {
     case recovery
     case reconnecting
     case scanning
@@ -42,7 +42,7 @@ enum CentralError: Error {
 class CentralViewModel: NSObject {
     private let disposeBag = DisposeBag()
     
-    private var connectedSubject: PublishSubject<BluetoothState> = .init()
+    private var connectedSubject: PublishSubject<BluetoothCentralState> = .init()
     private var receiveDataSubject: PublishSubject<Data> = .init()
     private var errorSubject: PublishSubject<CentralError> = .init()
     
@@ -50,7 +50,7 @@ class CentralViewModel: NSObject {
     private var characteristicInfoSubject: PublishSubject<String> = .init()
     private var descriptorInfoSubject: PublishSubject<String> = .init()
     
-    public var connected: Observable<BluetoothState> {
+    public var connected: Observable<BluetoothCentralState> {
         connectedSubject.asObservable()
     }
     public var receivedData: Observable<Data> {
@@ -75,14 +75,20 @@ class CentralViewModel: NSObject {
         descriptorInfoSubject.onNext("")
     }
     
-    func send(data: Data) {
-        //TODO: 연결된 상태가 되었을 때 보내야 함.
-        guard let peripheral = discoveredPeripheral,
-              peripheral.state == .connected else {
+    func send(data: BluetoothData) {
+        guard let peripheral = discoveredPeripheral else {
             return
         }
         
+        guard peripheral.state == .connected else {
+            return
+        }
+        
+        log.info("peripheral.state = \(peripheral.state)")
+        
+        //처음에 보낼 때이므로, 비우고 보낸다.
         dataToSend.removeAll(keepingCapacity: false)
+        
         dataToSend.append(data)
         
         writeData()
@@ -91,11 +97,11 @@ class CentralViewModel: NSObject {
     private var centralManager: CBCentralManager!
     private var discoveredPeripheral: CBPeripheral?
     /// CBPeripherialDelegate 내에서 주로 사용되어지며, peripheral로 전송하려는 특성을 나타낸다.
-    private var transferCharacteristic: CBCharacteristic?
+    private var transferTextCharacteristic: CBCharacteristic?
+    private var transferImageCharacteristic: CBCharacteristic?
     
-    private var dataToSend: [Data] = []
-    /// 수신하는 데이터가 나누어져서 올 수 있기 때문에 EOM(end of message)을 받기 전에 이곳에 쌓아둔다.
-    private var dataToReceive = Data()
+    private var dataToSend: [BluetoothData] = []
+    private var dataToReceive = Data() // 수신하는 데이터가 나누어져서 올 수 있기 때문에 EOM(end of message)을 받기 전에 이곳에 쌓아둔다.
     
     override init() {
         super.init()
@@ -156,13 +162,16 @@ extension CentralViewModel {
         
         if let connectedPeripheral = connectedPeripherals.last {
             connectedSubject.onNext(.connected)
+            
             log.verbose("Connecting to peripheral \(connectedPeripheral)")
 
             discoveredPeripheral = connectedPeripheral
             centralManager.connect(connectedPeripheral, options: nil)
         } else {
             connectedSubject.onNext(.scanning)
+            
             log.verbose("Scan for Peripherals")
+            
             // We were not connected to our counterpart, so start scanning
             centralManager.scanForPeripherals(withServices: [TransferService.serviceUUID],
                                               options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
@@ -180,6 +189,7 @@ extension CentralViewModel {
         }
         
         peripheral.cleanUp()
+        
         if cancelPeripheral == true {
             centralManager.cancelPeripheralConnection(peripheral)
             ready()
@@ -196,23 +206,32 @@ extension CentralViewModel {
             return
         }
         
-        guard let transferCharacteristic = transferCharacteristic else {
-            log.error("Characteristic is not ready.")
-            errorSubject.onNext(.emptyCharacteristic)
-            return
-        }
-        
-        log.info("peripheral.state = \(peripheral.state)")
-        
         guard let data = dataToSend.last else {
             return
         }
         
         connectedSubject.onNext(.sendingData)
         
-        // 완료된 반복 횟수와 주변 장치가 더 많은 데이터를 수용할 수 있는지 확인하십시오.
-        peripheral.write(data: data, characteristic: transferCharacteristic)
-        
+        if case .image(let data) = data {
+            if let transferCharacteristic = transferImageCharacteristic {
+                // 완료된 반복 횟수와 주변 장치가 더 많은 데이터를 수용할 수 있는지 확인하십시오.
+                peripheral.write(data: data, characteristic: transferCharacteristic)
+            }
+        } else if case .text(let data) = data {
+            if let transferCharacteristic = transferTextCharacteristic {
+                // 완료된 반복 횟수와 주변 장치가 더 많은 데이터를 수용할 수 있는지 확인하십시오.
+                peripheral.write(data: data, characteristic: transferCharacteristic)
+            }
+        } else if case .binary(_) = data {
+//            if let transferCharacteristic = transferImageCharacteristic {
+//                // 완료된 반복 횟수와 주변 장치가 더 많은 데이터를 수용할 수 있는지 확인하십시오.
+//                peripheral.write(data: data, characteristic: transferCharacteristic)
+//            }
+        } else {
+            log.error("Characteristic is not ready.")
+            errorSubject.onNext(.emptyCharacteristic)
+        }
+
         dataToSend.removeAll(keepingCapacity: false)
     }
 }
@@ -389,7 +408,8 @@ extension CentralViewModel: CBPeripheralDelegate {
         log.verbose("CALL peripheral.discoverCharacteristics")
         
         for service in peripheralServices {
-            peripheral.discoverCharacteristics([TransferService.characteristicUUID], for: service)
+            peripheral.discoverCharacteristics([TransferService.textCharacteristicUUID,
+                                                TransferService.imageCharacteristicUUID], for: service)
             
             log.verbose("service = \(service)")
             serviceInfoSubject.onNext("\(service.uuid)")
@@ -417,15 +437,30 @@ extension CentralViewModel: CBPeripheralDelegate {
             return
         }
 
+        //찾는 특성이 나오면 이 루프 안에서 구독하는 처리를 한다.
         for characteristic in serviceCharacteristics {
-            if characteristic.uuid == TransferService.characteristicUUID {
-                //TODO: 찾는게 나오면 구독하는 처리를 여기서 할 것.
-                transferCharacteristic = characteristic
+            
+            if characteristic.uuid == TransferService.textCharacteristicUUID {
+                transferTextCharacteristic = characteristic
+                
                 characteristicInfoSubject.onNext("\(characteristic.uuid)")
+
                 peripheral.setNotifyValue(true, for: characteristic)
+
+                peripheral.discoverDescriptors(for: characteristic)
+                
                 connectedSubject.onNext(.subscribing)
                 
+            } else if characteristic.uuid == TransferService.imageCharacteristicUUID {
+                transferImageCharacteristic = characteristic
+                
+                characteristicInfoSubject.onNext("\(characteristic.uuid)")
+                
+                peripheral.setNotifyValue(true, for: characteristic)
+
                 peripheral.discoverDescriptors(for: characteristic)
+                
+                connectedSubject.onNext(.subscribing)
             }
         }
         
@@ -435,6 +470,7 @@ extension CentralViewModel: CBPeripheralDelegate {
     
     func peripheral(_ peripheral: CBPeripheral, didDiscoverDescriptorsFor characteristic: CBCharacteristic, error: (any Error)?) {
         guard let descriptors = characteristic.descriptors else { return }
+        
         for descriptor in descriptors {
             // 여기서 descriptor 객체를 사용할 수 있습니다.
             // 예: descriptor 읽기
@@ -459,20 +495,23 @@ extension CentralViewModel: CBPeripheralDelegate {
         }
         
         let stringFromData = String(data: characteristicData, encoding: .utf8)
-        log.verbose("Received \(characteristicData.count) bytes: \(String(describing: stringFromData))")
+        log.verbose("received data length : \(characteristicData.count)")
+        log.verbose("bytes: \(String(describing: stringFromData))")
         
         //메시지 끝 토큰을 받게 되면
         if stringFromData == "EOM" {
-            connectedSubject.onNext(.receiveCompleted)
             //이 메서드가 어느 스레드에서 다시 호출될지 모르기 때문에 UI 업데이트를 위해 텍스트 보기 업데이트를 기본 대기열로 전달합니다.
             //Rx로 처리하므로, observer쪽에서 메인쓰레드로 바꾸면 될 듯.
             receiveDataSubject.onNext(self.dataToReceive)
-
+            
             dataToReceive.removeAll(keepingCapacity: false)
+            
+            connectedSubject.onNext(.receiveCompleted)
         } else {
-            connectedSubject.onNext(.receivingData)
             //그렇지 않으면 이전에 받은 데이터에 데이터를 추가하면 됩니다.
             dataToReceive.append(characteristicData)
+            
+            connectedSubject.onNext(.receivingData)
         }
     }
     
@@ -492,7 +531,7 @@ extension CentralViewModel: CBPeripheralDelegate {
         }
 
         // 전송 특성이 아닐 경우 종료
-        guard TransferService.characteristicUUID == characteristic.uuid else {
+        guard TransferService.characteristics.contains(characteristic.uuid) else {
             //해당되는 특성이 아니므로, clean할 필요는 없다.
             errorSubject.onNext(.unknownCharacteristic)
             return
@@ -525,7 +564,7 @@ extension CBPeripheral {
         
         for service in (services ?? [] as [CBService]) {
             for characteristic in (service.characteristics ?? [] as [CBCharacteristic]) {
-                if characteristic.uuid == TransferService.characteristicUUID && characteristic.isNotifying {
+                if TransferService.characteristics.contains(characteristic.uuid) && characteristic.isNotifying {
                     // 알림이 오니까 구독취소
                     setNotifyValue(false, for: characteristic)
                 }
@@ -551,8 +590,5 @@ extension CBPeripheral {
         self.writeValue("EOM".data(using: .utf8)!, for: characteristic, type: .withoutResponse)
         
         log.verbose("Writing EOM")
-        
-        // 특성 구독 취소
-//        self.setNotifyValue(false, for: characteristic)
     }
 }

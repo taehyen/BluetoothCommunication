@@ -12,6 +12,7 @@ import RxMediaPicker
 
 class PeripheralViewController: UIViewController {
     let disposeBag = DisposeBag()
+    
     lazy var picker: RxMediaPicker = {
         RxMediaPicker(delegate: self)
     }()
@@ -31,7 +32,7 @@ class PeripheralViewController: UIViewController {
         selectImageButton.setTitle("Unselect Image", for: .selected)
         selectImageButton.setTitleColor(.white, for: .selected)
         
-        selectImageButton.rx.tap.throttle(.seconds(1), scheduler: MainScheduler.instance).subscribe(onNext: { _ in
+        selectImageButton.rx.tap.throttle(.milliseconds(500), scheduler: MainScheduler.instance).subscribe(onNext: { _ in
             if self.selectImageButton.isSelected {
                 self.removeImage()
             } else {
@@ -55,14 +56,18 @@ class PeripheralViewController: UIViewController {
     }
     
     var peripheralManager: CBPeripheralManager!
-    
-    var transferCharacteristic: CBMutableCharacteristic?
+    var transferTextCharacteristic: CBMutableCharacteristic?
+    var transferImageCharacteristic: CBMutableCharacteristic?
     var connectedCentral: CBCentral?
     
-    var dataToSend = Data()
+    var dataToSend: [BluetoothData] = []
     var dataToReceive = Data()
     
-    var sendDataIndex: Int = 0
+    var operationQueue: OperationQueue = {
+        var queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 2
+        return queue
+    }()
 }
 
 extension PeripheralViewController {
@@ -77,12 +82,14 @@ extension PeripheralViewController {
     }
     
     private func setupPeripheral() {
-        
-        // Build our service.
-        
         // Start with the CBMutableCharacteristic.
-        let transferCharacteristic = CBMutableCharacteristic(type: TransferService.characteristicUUID,
-                                                             properties: [.indicate, .write, .read],
+        let transferTextCharacteristic = CBMutableCharacteristic(type: TransferService.textCharacteristicUUID,
+                                                             properties: [.indicate, .writeWithoutResponse, .read],
+                                                             value: nil,
+                                                             permissions: [.readable, .writeable])
+        
+        let transferImageCharacteristic = CBMutableCharacteristic(type: TransferService.imageCharacteristicUUID,
+                                                             properties: [.indicate, .writeWithoutResponse, .read],
                                                              value: nil,
                                                              permissions: [.readable, .writeable])
         
@@ -90,13 +97,14 @@ extension PeripheralViewController {
         let transferService = CBMutableService(type: TransferService.serviceUUID, primary: true)
         
         // Add the characteristic to the service.
-        transferService.characteristics = [transferCharacteristic]
+        transferService.characteristics = [transferTextCharacteristic, transferImageCharacteristic]
         
         // And add it to the peripheral manager.
         peripheralManager.add(transferService)
         
         // Save the characteristic for later.
-        self.transferCharacteristic = transferCharacteristic
+        self.transferTextCharacteristic = transferTextCharacteristic
+        self.transferImageCharacteristic = transferImageCharacteristic
         
         //test
         startAdvertising()
@@ -115,87 +123,52 @@ extension PeripheralViewController {
 
 // MARK: Helper
 extension PeripheralViewController {
-    /*
-     *  Sends the next amount of data to the connected central
-     */
-    static var sendingEOM = false
-    
     private func sendData() {
-        
-        guard let transferCharacteristic = transferCharacteristic else {
+        guard dataToSend.count > 0 else {
+            log.info("data to send isn't")
             return
         }
-        
-        // First up, check if we're meant to be sending an EOM
-        if PeripheralViewController.sendingEOM {
-            // send it
-            let didSend = peripheralManager.updateValue("EOM".data(using: .utf8)!, for: transferCharacteristic, onSubscribedCentrals: nil)
-            // Did it send?
-            if didSend {
-                // It did, so mark it as sent
-                PeripheralViewController.sendingEOM = false
-                log.verbose("Sent: EOM")
+
+        var imageToSend = Data()
+        var textToSend = Data()
+        dataToSend.forEach { data in
+            if case .image(let data) = data {
+                imageToSend.append(data)
+            } else if case .text(let data) = data {
+                textToSend.append(data)
+            } else if case .binary(_) = data {
+                log.warning("binary???????????")
             }
-            // It didn't send, so we'll exit and wait for peripheralManagerIsReadyToUpdateSubscribers to call sendData again
-            return
         }
         
-        // We're not sending an EOM, so we're sending data
-        // Is there any left to send?
-        if sendDataIndex >= dataToSend.count {
-            // No data left.  Do nothing
-            return
+        if imageToSend.count > 0, transferImageCharacteristic != nil {
+            //operation
+            let operation = BluetoothDataOperation.createInstance(manager: peripheralManager,
+                                                                  central: connectedCentral,
+                                                                  characteristic: transferImageCharacteristic!)
+            
+            operation.dataToSend = imageToSend
+            
+            operationQueue.addOperation(operation)
+            
+            imageToSend.removeAll(keepingCapacity: false)
         }
         
-        // There's data left, so send until the callback fails, or we're done.
-        var didSend = true
-        while didSend {
+        if textToSend.count > 0, transferTextCharacteristic != nil {
+            //operation
+            let operation = BluetoothDataOperation.createInstance(manager: peripheralManager,
+                                                                  central: connectedCentral,
+                                                                  characteristic: transferTextCharacteristic!)
             
-            // Work out how big it should be
-            var amountToSend = dataToSend.count - sendDataIndex
-            if let mtu = connectedCentral?.maximumUpdateValueLength {
-                amountToSend = min(amountToSend, mtu)
-            }
+            operation.dataToSend = textToSend
             
-            // Copy out the data we want
-            let chunk = dataToSend.subdata(in: sendDataIndex..<(sendDataIndex + amountToSend))
+            operationQueue.addOperation(operation)
             
-            // Send it
-            didSend = peripheralManager.updateValue(chunk, for: transferCharacteristic, onSubscribedCentrals: nil)
-            
-            // If it didn't work, drop out and wait for the callback
-            if !didSend {
-                return
-            }
-            
-            let stringFromData = String(data: chunk, encoding: .utf8)
-            log.verbose("Sent \(chunk.count) bytes: \(String(describing: stringFromData))")
-            
-            // It did send, so update our index
-            sendDataIndex += amountToSend
-            // Was it the last one?
-            if sendDataIndex >= dataToSend.count {
-                // It was - send an EOM
-                
-                // Set this so if the send fails, we'll send it next time
-                PeripheralViewController.sendingEOM = true
-                
-                //Send it
-                let eomSent = peripheralManager.updateValue("EOM".data(using: .utf8)!,
-                                                            for: transferCharacteristic, onSubscribedCentrals: nil)
-                
-                if eomSent {
-                    // It sent; we're all done
-                    PeripheralViewController.sendingEOM = false
-                    log.verbose("Sent: EOM")
-                    
-                    removeImage()
-                    
-                    sendDataIndex = 0
-                    dataToSend.removeAll(keepingCapacity: false)
-                }
-                return
-            }
+            textToSend.removeAll(keepingCapacity: false)
+        }
+        
+        if imageToSend.count == 0 && textToSend.count == 0 {
+            dataToSend.removeAll(keepingCapacity: false)
         }
     }
 }
@@ -256,18 +229,14 @@ extension PeripheralViewController: CBPeripheralManagerDelegate {
         peripheralManager.setDesiredConnectionLatency(.low, for: central)
         
         // Get the data
-//        dataToSend = textView.text.data(using: .utf8)!
+        if let data = textView.text.data(using: .utf8) {
+            dataToSend.append(.text(data))
+        }
 
         // save central
         connectedCentral = central
         
-        // Start sending if it has some data to send.
-        if dataToSend.count > 0 {
-            // Reset the index
-            sendDataIndex = 0
-            
-            sendData()
-        }
+        sendData()
     }
     
     /*
@@ -360,10 +329,109 @@ extension PeripheralViewController {
             
             //TODO: it needs to send image data after change bytes to periphercal connected.
             if let data = self.imageView.image?.jpegData(compressionQuality: 0.7) {
-                self.dataToSend = data
+                self.dataToSend.append(.image(data))
                 
                 self.sendData()
             }
         }).disposed(by: disposeBag)
+    }
+}
+
+
+class BluetoothDataOperation: Operation {
+    private var peripheralManager: CBPeripheralManager!
+    private weak var connectedCentral: CBCentral?
+    private var transferCharacteristic: CBMutableCharacteristic!
+    
+    private var sendDataIndex: Int = 0
+    var dataToSend = Data()
+    
+    var sendingEOM = false
+    
+    static func createInstance(manager: CBPeripheralManager, central: CBCentral?, characteristic: CBMutableCharacteristic) -> BluetoothDataOperation {
+        let operation = BluetoothDataOperation()
+        operation.peripheralManager = manager
+        operation.transferCharacteristic = characteristic
+        operation.connectedCentral = central
+        return operation
+    }
+    
+    override func main() {
+        guard let peripheralManager = peripheralManager else {
+            log.error("operation: \(self) - peripheralManager is nil")
+            return
+        }
+        
+        // 먼저 EOM을 보낼 예정인지 확인하세요.
+        if sendingEOM {
+            // 보낸다.
+            let didSend = peripheralManager.updateValue("EOM".data(using: .utf8)!, for: transferCharacteristic, onSubscribedCentrals: nil)
+            // 보냈나?
+            if didSend {
+                // 그랬으므로 전송됨으로 표시하세요.
+                sendingEOM = false
+                log.verbose("Sent: EOM")
+            }
+            // 전송되지 않았으므로 종료하고 PeripheralManagerIsReadyToUpdateSubscribers가 sendData를 다시 호출할 때까지 기다립니다.
+            return
+        }
+        
+        // EOM을 보내는 것이 아니므로 데이터를 보내는 중.
+        // 보낼게 남았나?
+        if sendDataIndex >= dataToSend.count {
+            // No data left.  Do nothing
+            return
+        }
+        
+        // There's data left, so send until the callback fails, or we're done.
+        var didSend = true
+        while didSend {
+            
+            // Work out how big it should be
+            var amountToSend = dataToSend.count - sendDataIndex
+            if let mtu = connectedCentral?.maximumUpdateValueLength {
+                amountToSend = min(amountToSend, mtu)
+            }
+            
+            // Copy out the data we want
+            let chunk = dataToSend.subdata(in: sendDataIndex..<(sendDataIndex + amountToSend))
+            
+            // Send it
+            didSend = peripheralManager.updateValue(chunk, for: transferCharacteristic, onSubscribedCentrals: nil)
+            
+            // 작동하지 않으면 중단하고 콜백을 기다립니다.
+            if !didSend {
+                log.info("If it didn't work, drop out and wait for the callback")
+                return
+            }
+            
+            let stringFromData = String(data: chunk, encoding: .utf8)
+            log.verbose("Sent \(chunk.count) bytes: \(String(describing: stringFromData))")
+            
+            // It did send, so update our index
+            sendDataIndex += amountToSend
+            // Was it the last one?
+            if sendDataIndex >= dataToSend.count {
+                // It was - send an EOM
+                
+                // Set this so if the send fails, we'll send it next time
+                sendingEOM = true
+                
+                //Send it
+                let eomSent = peripheralManager.updateValue("EOM".data(using: .utf8)!,
+                                                            for: transferCharacteristic, 
+                                                            onSubscribedCentrals: nil)
+                
+                if eomSent {
+                    // It sent; we're all done
+                    sendingEOM = false
+                    log.verbose("Sent: EOM")
+                    
+                    sendDataIndex = 0
+                    dataToSend.removeAll(keepingCapacity: false)
+                }
+                return
+            }
+        }
     }
 }
