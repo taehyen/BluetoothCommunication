@@ -306,6 +306,12 @@ extension CentralViewModel: CBPeripheralDelegate {
         
         for service in peripheralServices {
             peripheral.discoverCharacteristics([TransferService.characteristicUUID], for: service)
+            
+            if let characteristics = service.characteristics {
+                log.verbose("service.characteristics = \(characteristics)")
+            } else {
+                log.verbose("service.characteristics is nil")
+            }
         }
     }
     
