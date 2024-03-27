@@ -168,14 +168,17 @@ extension CentralViewModel {
      구독이 있는 경우 구독이 취소되고, 구독이 없으면 연결이 바로 끊어집니다.
      didUpdateNotificationStateForCharacteristic은 구독이 관련된 경우 연결을 취소합니다.
      */
-    private func cleanup() {
+    private func cleanup(cancelPeripheral: Bool = true) {
         guard let peripheral = discoveredPeripheral else {
             return
         }
         
         peripheral.cleanUp()
-        centralManager.cancelPeripheralConnection(peripheral)
-        
+        if cancelPeripheral == true {
+            centralManager.cancelPeripheralConnection(peripheral)
+            ready()
+        }
+
         connectedSubject.onNext(.disconnected)
     }
     
@@ -203,6 +206,8 @@ extension CentralViewModel {
         
         // 완료된 반복 횟수와 주변 장치가 더 많은 데이터를 수용할 수 있는지 확인하십시오.
         peripheral.write(data: data, characteristic: transferCharacteristic)
+        
+        dataToSend.removeAll(keepingCapacity: false)
     }
 }
 
@@ -332,6 +337,8 @@ extension CentralViewModel: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         connectedSubject.onNext(.disconnected)
         log.verbose("didDisconnectPeripheral: \(peripheral)")
+        
+        ready()
         
         //연결이 끊어졌으니 다시 스캔을 시작하세요
         retrievePeripheral()
@@ -492,7 +499,7 @@ extension CentralViewModel: CBPeripheralDelegate {
         } else {
             // 알림이 중지되었으므로 주변기기와의 연결을 끊습니다.
             log.verbose("Notification stopped on \(characteristic). Disconnecting")
-            cleanup()
+            cleanup(cancelPeripheral: false)
         }
     }
     
@@ -540,6 +547,6 @@ extension CBPeripheral {
         log.verbose("Writing EOM")
         
         // 특성 구독 취소
-        self.setNotifyValue(false, for: characteristic)
+//        self.setNotifyValue(false, for: characteristic)
     }
 }

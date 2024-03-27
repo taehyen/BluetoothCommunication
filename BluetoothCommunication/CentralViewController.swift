@@ -38,7 +38,7 @@ class CentralViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
-        self.view.makeToast("Toast Test")
+        self.view.makeToast("Begin Central Mode")
     }
     
     private func bindData() {
@@ -53,6 +53,7 @@ class CentralViewController: UIViewController {
         
         viewModel.receivedData.subscribe(onNext: { data in
             // TODO: 데이터를 이어받던게 완료되면 들어온다. 따라서, 프로그래스 형식을 구현하려면 여기서는 안됨.
+            log.verbose("receive: \(data), \(data.hexEncodedString())")
             self.receivedDataLabel.text = data.hexEncodedString()
         }).disposed(by: disposeBag)
         
@@ -72,8 +73,8 @@ class CentralViewController: UIViewController {
     private func bindUI() {
         test1Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
             .subscribe(onNext: { _ in
-                if let data = "Send Data Testing".data(using: .utf8) {
-                    self.view.makeToast("Send Data Testing")
+                if let data = "test string".data(using: .utf8) {
+                    self.view.makeToast("send : test string")
                     self.viewModel.send(data: data)
                 }
             }).disposed(by: disposeBag)
