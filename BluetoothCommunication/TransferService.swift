@@ -23,10 +23,24 @@ struct TransferService {
     static let peripheralName = "Beamo Peripheral"
 }
 
-enum BluetoothData {
+infix operator <>: MultiplicationPrecedence
+enum BluetoothData: Equatable {
     case image(Data)
     case text(Data)
     case binary(Data)
+    
+    static func <> (left: BluetoothData, right: BluetoothData) -> Bool {
+        switch (left, right) {
+            case (.image(_), .image(_)):
+                return true
+            case (.text(_), .text(_)):
+                return true
+            case (.binary(_), .binary(_)):
+                return true
+            default:
+                return false
+        }
+    }
 }
 
 extension String {

@@ -43,7 +43,7 @@ class CentralViewModel: NSObject {
     private let disposeBag = DisposeBag()
     
     private var connectedSubject: PublishSubject<BluetoothCentralState> = .init()
-    private var receiveDataSubject: PublishSubject<Data> = .init()
+    private var receiveDataSubject: PublishSubject<BluetoothData> = .init()
     private var errorSubject: PublishSubject<CentralError> = .init()
     
     private var serviceInfoSubject: PublishSubject<String> = .init()
@@ -53,7 +53,7 @@ class CentralViewModel: NSObject {
     public var connected: Observable<BluetoothCentralState> {
         connectedSubject.asObservable()
     }
-    public var receivedData: Observable<Data> {
+    public var receivedData: Observable<BluetoothData> {
         receiveDataSubject.asObservable()
     }
     public var error: Observable<CentralError> {
@@ -101,7 +101,8 @@ class CentralViewModel: NSObject {
     private var transferImageCharacteristic: CBCharacteristic?
     
     private var dataToSend: [BluetoothData] = []
-    private var dataToReceive = Data() // 수신하는 데이터가 나누어져서 올 수 있기 때문에 EOM(end of message)을 받기 전에 이곳에 쌓아둔다.
+    private var imageToReceive = Data() // 수신하는 데이터가 나누어져서 올 수 있기 때문에 EOM(end of message)을 받기 전에 이곳에 쌓아둔다.
+    private var textToReceive = Data() // 수신하는 데이터가 나누어져서 올 수 있기 때문에 EOM(end of message)을 받기 전에 이곳에 쌓아둔다.
     
     override init() {
         super.init()
@@ -146,7 +147,8 @@ extension CentralViewModel {
         connectedSubject.onNext(.disconnected)
         
         dataToSend.removeAll(keepingCapacity: false)
-        dataToReceive.removeAll(keepingCapacity: false)
+        imageToReceive.removeAll(keepingCapacity: false)
+        textToReceive.removeAll(keepingCapacity: false)
     }
     
     /*
@@ -350,7 +352,7 @@ extension CentralViewModel: CBCentralManagerDelegate {
         
 //TODO: 끊어졌다가 다시 연결하는 경우에는, 지우면 안될지도 모른다.
         //이미 가지고 있을 수 있는 데이터 지우기
-        dataToReceive.removeAll(keepingCapacity: false)
+        imageToReceive.removeAll(keepingCapacity: false)
         dataToSend.removeAll(keepingCapacity: false)
         
         peripheral.delegate = self //CBPeripheralDelegate
@@ -502,15 +504,25 @@ extension CentralViewModel: CBPeripheralDelegate {
         if stringFromData == "EOM" {
             //이 메서드가 어느 스레드에서 다시 호출될지 모르기 때문에 UI 업데이트를 위해 텍스트 보기 업데이트를 기본 대기열로 전달합니다.
             //Rx로 처리하므로, observer쪽에서 메인쓰레드로 바꾸면 될 듯.
-            receiveDataSubject.onNext(self.dataToReceive)
-            
-            dataToReceive.removeAll(keepingCapacity: false)
-            
+            if imageToReceive.count > 0 {
+                receiveDataSubject.onNext(.image(imageToReceive))
+                imageToReceive.removeAll(keepingCapacity: false)
+            }
+            if textToReceive.count > 0 {
+                receiveDataSubject.onNext(.text(textToReceive))
+                textToReceive.removeAll(keepingCapacity: false)
+            }
+
             connectedSubject.onNext(.receiveCompleted)
         } else {
-            //그렇지 않으면 이전에 받은 데이터에 데이터를 추가하면 됩니다.
-            dataToReceive.append(characteristicData)
-            
+            if characteristic == transferTextCharacteristic {
+                //그렇지 않으면 이전에 받은 데이터에 데이터를 추가하면 됩니다.
+                textToReceive.append(characteristicData)
+            } else if characteristic == transferImageCharacteristic {
+                //그렇지 않으면 이전에 받은 데이터에 데이터를 추가하면 됩니다.
+                imageToReceive.append(characteristicData)
+            }
+
             connectedSubject.onNext(.receivingData)
         }
     }

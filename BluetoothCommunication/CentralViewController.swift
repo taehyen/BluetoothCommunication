@@ -58,9 +58,16 @@ class CentralViewController: UIViewController {
         
         viewModel.receivedData.subscribe(onNext: { data in
             // TODO: 데이터를 이어받던게 완료되면 들어온다. 따라서, 프로그래스 형식을 구현하려면 여기서는 안됨.
-            let text = data.hexEncodedString()
-            log.verbose("UI - receive: \(text)")
-            self.receivedDataLabel.text = text
+            if case .image(let data) = data {
+                let textContainImageSize = "image size: \(data.count) bytes"
+                log.verbose("UI - receive \(textContainImageSize)")
+                self.receivedDataLabel.text = textContainImageSize
+            } else if case .text(let data) = data {
+                let text = data.hexEncodedString()
+                log.verbose("UI - receive: \(text)")
+                self.receivedDataLabel.text = text
+            }
+            
         }).disposed(by: disposeBag)
         
         viewModel.serviceInfo.subscribe(onNext: { info in
