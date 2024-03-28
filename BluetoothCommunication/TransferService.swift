@@ -23,6 +23,12 @@ struct TransferService {
     static let peripheralName = "Beamo Peripheral"
 }
 
+enum ServiceType {
+    case notDefined
+    case imageOnly
+    case textOnly
+}
+
 infix operator <>: MultiplicationPrecedence
 enum BluetoothData: Equatable {
     case image(Data)
