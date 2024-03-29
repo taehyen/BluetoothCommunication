@@ -26,6 +26,7 @@
 		3D8615692B8F1929009E78D2 /* RxMediaPicker in Frameworks */ = {isa = PBXBuildFile; productRef = 3D8615682B8F1929009E78D2 /* RxMediaPicker */; };
 		3D86156C2B8F193B009E78D2 /* RxCocoa in Frameworks */ = {isa = PBXBuildFile; productRef = 3D86156B2B8F193B009E78D2 /* RxCocoa */; };
 		3D86156E2B8F193B009E78D2 /* RxSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 3D86156D2B8F193B009E78D2 /* RxSwift */; };
+		3DACF49F2BB6580900B2E589 /* PeripheralViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DACF49E2BB6580900B2E589 /* PeripheralViewModel.swift */; };
 		3DE8341C2B95C46A000C6289 /* SpotDataQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DE8341B2B95C46A000C6289 /* SpotDataQueue.swift */; };
 		3DE8341E2B95C93D000C6289 /* CoreDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DE8341D2B95C93D000C6289 /* CoreDataManager.swift */; };
 		3DEB84FF2BA42F5200A41C79 /* CentralViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DEB84FE2BA42F5200A41C79 /* CentralViewModel.swift */; };
@@ -69,6 +70,7 @@
 		3D8615572B8C6C69009E78D2 /* CentralViewController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = CentralViewController.storyboard; sourceTree = "<group>"; };
 		3D8615592B8C6CBF009E78D2 /* PeripheralViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeripheralViewController.swift; sourceTree = "<group>"; };
 		3D86155B2B8C6CC7009E78D2 /* PeripheralViewController.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = PeripheralViewController.storyboard; sourceTree = "<group>"; };
+		3DACF49E2BB6580900B2E589 /* PeripheralViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeripheralViewModel.swift; sourceTree = "<group>"; };
 		3DE8341B2B95C46A000C6289 /* SpotDataQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotDataQueue.swift; sourceTree = "<group>"; };
 		3DE8341D2B95C93D000C6289 /* CoreDataManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataManager.swift; sourceTree = "<group>"; };
 		3DEB84FE2BA42F5200A41C79 /* CentralViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CentralViewModel.swift; sourceTree = "<group>"; };
@@ -133,9 +135,10 @@
 				3DE8341B2B95C46A000C6289 /* SpotDataQueue.swift */,
 				3DE8341D2B95C93D000C6289 /* CoreDataManager.swift */,
 				3D8615212B8C6671009E78D2 /* ViewController.swift */,
-				3D8615522B8C6801009E78D2 /* CentralViewController.swift */,
 				3DEB84FE2BA42F5200A41C79 /* CentralViewModel.swift */,
+				3D8615522B8C6801009E78D2 /* CentralViewController.swift */,
 				3D8615572B8C6C69009E78D2 /* CentralViewController.storyboard */,
+				3DACF49E2BB6580900B2E589 /* PeripheralViewModel.swift */,
 				3D8615592B8C6CBF009E78D2 /* PeripheralViewController.swift */,
 				3D86155B2B8C6CC7009E78D2 /* PeripheralViewController.storyboard */,
 				3D8615232B8C6671009E78D2 /* Main.storyboard */,
@@ -317,6 +320,7 @@
 				3D86155A2B8C6CBF009E78D2 /* PeripheralViewController.swift in Sources */,
 				3D8615202B8C6671009E78D2 /* SceneDelegate.swift in Sources */,
 				3D8615532B8C6801009E78D2 /* CentralViewController.swift in Sources */,
+				3DACF49F2BB6580900B2E589 /* PeripheralViewModel.swift in Sources */,
 				3DE8341E2B95C93D000C6289 /* CoreDataManager.swift in Sources */,
 				3D8615282B8C6671009E78D2 /* BluetoothCommunication.xcdatamodeld in Sources */,
 				3DE8341C2B95C46A000C6289 /* SpotDataQueue.swift in Sources */,

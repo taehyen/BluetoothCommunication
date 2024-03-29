@@ -39,8 +39,35 @@ enum CentralError: Error {
     case unknown(String)
 }
 
-class CentralViewModel: NSObject {
+protocol CentralViewModelType {
+    var inputs: CentralViewModelInputs { get }
+    var outputs: CentralViewModelOutputs { get }
+}
+
+protocol CentralViewModelInputs {
+    func initCentral()
+    func finalCentral()
+    func send(data: BluetoothData)
+}
+
+protocol CentralViewModelOutputs {
+    var error: Observable<CentralError> { get }
+    var connected: Observable<BluetoothCentralState> { get }
+    var receivedData: Observable<BluetoothData> { get }
+    var serviceInfo: Observable<String> { get }
+    var characteristicInfo: Observable<String> { get }
+    var descriptorInfo: Observable<String> { get }
+}
+
+class CentralViewModel: NSObject, CentralViewModelType {
     private let disposeBag = DisposeBag()
+    
+    private var centralManager: CBCentralManager!
+    private var discoveredPeripheral: CBPeripheral?
+    /// CBPeripherialDelegate 내에서 주로 사용되어지며, peripheral로 전송하려는 특성을 나타낸다.
+    private var transferTextCharacteristic: CBCharacteristic?
+    private var transferImageCharacteristic: CBCharacteristic?
+    
     
     private var connectedSubject: PublishSubject<BluetoothCentralState> = .init()
     private var receiveDataSubject: PublishSubject<BluetoothData> = .init()
@@ -50,29 +77,31 @@ class CentralViewModel: NSObject {
     private var characteristicInfoSubject: PublishSubject<String> = .init()
     private var descriptorInfoSubject: PublishSubject<String> = .init()
     
-    public var connected: Observable<BluetoothCentralState> {
-        connectedSubject.asObservable()
-    }
-    public var receivedData: Observable<BluetoothData> {
-        receiveDataSubject.asObservable()
-    }
-    public var error: Observable<CentralError> {
-        errorSubject.asObservable()
-    }
-    public var serviceInfo: Observable<String> {
-        serviceInfoSubject.asObservable()
-    }
-    public var characteristicInfo: Observable<String> {
-        characteristicInfoSubject.asObservable()
-    }
-    public var descriptorInfo: Observable<String> {
-        descriptorInfoSubject.asObservable()
+    private var dataToSend: [BluetoothData] = []
+    private var imageToReceive = Data() // 수신하는 데이터가 나누어져서 올 수 있기 때문에 EOM(end of message)을 받기 전에 이곳에 쌓아둔다.
+    private var textToReceive = Data() // 수신하는 데이터가 나누어져서 올 수 있기 때문에 EOM(end of message)을 받기 전에 이곳에 쌓아둔다.
+    
+    override init() {
+        super.init()
     }
     
-    func ready() {
-        serviceInfoSubject.onNext("")
-        characteristicInfoSubject.onNext("")
-        descriptorInfoSubject.onNext("")
+    deinit {
+        log.verbose("\(String(describing: self)) disposed")
+    }
+    
+    var inputs: CentralViewModelInputs { self }
+    var outputs: CentralViewModelOutputs { self }
+}
+
+// MARK: - Inputs
+extension CentralViewModel: CentralViewModelInputs {
+    func initCentral() {
+        initCentralManager()
+        ready()
+    }
+    
+    func finalCentral() {
+        finalCentralManager()
     }
     
     func send(data: BluetoothData) {
@@ -93,29 +122,35 @@ class CentralViewModel: NSObject {
         
         writeData()
     }
-    
-    private var centralManager: CBCentralManager!
-    private var discoveredPeripheral: CBPeripheral?
-    /// CBPeripherialDelegate 내에서 주로 사용되어지며, peripheral로 전송하려는 특성을 나타낸다.
-    private var transferTextCharacteristic: CBCharacteristic?
-    private var transferImageCharacteristic: CBCharacteristic?
-    
-    private var dataToSend: [BluetoothData] = []
-    private var imageToReceive = Data() // 수신하는 데이터가 나누어져서 올 수 있기 때문에 EOM(end of message)을 받기 전에 이곳에 쌓아둔다.
-    private var textToReceive = Data() // 수신하는 데이터가 나누어져서 올 수 있기 때문에 EOM(end of message)을 받기 전에 이곳에 쌓아둔다.
-    
-    override init() {
-        super.init()
-        initCentralManager()
+}
+
+
+// MARK: - Outputs
+extension CentralViewModel: CentralViewModelOutputs {
+    var error: Observable<CentralError> {
+        errorSubject.asObservable().compactMap { $0 }
     }
     
-    deinit {
-        finalCentralManager()
+    public var connected: Observable<BluetoothCentralState> {
+        connectedSubject.asObservable()
+    }
+    public var receivedData: Observable<BluetoothData> {
+        receiveDataSubject.asObservable()
+    }
+    public var serviceInfo: Observable<String> {
+        serviceInfoSubject.asObservable()
+    }
+    public var characteristicInfo: Observable<String> {
+        characteristicInfoSubject.asObservable()
+    }
+    public var descriptorInfo: Observable<String> {
+        descriptorInfoSubject.asObservable()
     }
 }
 
-extension CentralViewModel {
-    private func initCentralManager() {
+// MARK: - Private
+private extension CentralViewModel {
+    func initCentralManager() {
         //queue는 main thread에서 처리해야하므로, 기본값인 nil로 한다.
         centralManager = CBCentralManager(delegate: self, queue: nil,
                                           options: [CBCentralManagerOptionShowPowerAlertKey: true,
@@ -140,7 +175,7 @@ extension CentralViewModel {
          */
     }
     
-    private func finalCentralManager() {
+    func finalCentralManager() {
         centralManager.stopScan()
         log.info("Scanning stopped")
         
@@ -151,11 +186,17 @@ extension CentralViewModel {
         textToReceive.removeAll(keepingCapacity: false)
     }
     
+    func ready() {
+        serviceInfoSubject.onNext("")
+        characteristicInfoSubject.onNext("")
+        descriptorInfoSubject.onNext("")
+    }
+    
     /*
      먼저 상대방과 이미 연결되어 있는지 확인하겠습니다.
      그렇지 않은 경우에는 주변 장치를 검색하십시오. 특히 이 회사의 서비스의 128비트 CBUUID에 대한 것입니다.
      */
-    private func retrievePeripheral() {
+    func retrievePeripheral() {
         let connectedPeripherals = (centralManager.retrieveConnectedPeripherals(withServices: [TransferService.serviceUUID]))
         
         //TODO: 여러개가 존재할 때, 정확히 어떤 Peripheral에 접속해야 하는지 조건식이 추가되어야 한다.
@@ -185,7 +226,7 @@ extension CentralViewModel {
      구독이 있는 경우 구독이 취소되고, 구독이 없으면 연결이 바로 끊어집니다.
      didUpdateNotificationStateForCharacteristic은 구독이 관련된 경우 연결을 취소합니다.
      */
-    private func cleanup(cancelPeripheral: Bool = true) {
+    func cleanup(cancelPeripheral: Bool = true) {
         guard let peripheral = discoveredPeripheral else {
             return
         }
@@ -201,7 +242,7 @@ extension CentralViewModel {
     }
     
     // 주변 장치에 일부 테스트 데이터 쓰기
-    private func writeData() {
+    func writeData() {
         guard let peripheral = discoveredPeripheral else {
             log.error("peripheral is not ready.")
             errorSubject.onNext(.notReadyPeripheral)
