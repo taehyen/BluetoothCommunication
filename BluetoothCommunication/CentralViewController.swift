@@ -36,16 +36,20 @@ class CentralViewController: UIViewController {
         
         bindUI()
         bindData()
-        
-        viewModel.inputs.initCentral()
     }
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
-        viewModel.inputs.finalCentral()
-        
+        viewModel.inputs.initCentral()
+
         self.view.makeToast("Begin Central Mode")
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        
+        viewModel.inputs.finalCentral()
     }
     
     private func bindData() {

@@ -72,8 +72,6 @@ extension PeripheralViewModel: PeripheralViewModelInputs {
     
     func stop() {
         stopAdvertising()
-        
-        finalPeripheralManager()
     }
     
     func send(data: BluetoothData) {

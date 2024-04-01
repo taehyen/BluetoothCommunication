@@ -30,8 +30,6 @@ class PeripheralViewController: UIViewController {
         bindUI()
         bindData()
         
-        viewModel.inputs.initPeripheral()
-        
         textView.delegate = self
         textView.text = ""
         
@@ -44,6 +42,7 @@ class PeripheralViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
+        viewModel.inputs.initPeripheral()
         viewModel.inputs.start()
     }
     
@@ -51,6 +50,7 @@ class PeripheralViewController: UIViewController {
         super.viewWillDisappear(animated)
         
         viewModel.inputs.stop()
+        viewModel.inputs.finalPeripheral()
     }
     
     private func bindData() {

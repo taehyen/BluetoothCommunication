@@ -177,7 +177,7 @@ private extension CentralViewModel {
     
     func finalCentralManager() {
         centralManager.stopScan()
-        log.info("Scanning stopped")
+//        log.verbose("Scanning stopped")
         
         connectedSubject.onNext(.disconnected)
         
@@ -210,8 +210,11 @@ private extension CentralViewModel {
 
             discoveredPeripheral = connectedPeripheral
             centralManager.connect(connectedPeripheral, options: nil)
+            
         } else {
             connectedSubject.onNext(.scanning)
+            
+            centralManager.delegate = self
             
             log.verbose("Scan for Peripherals")
             
