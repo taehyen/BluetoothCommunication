@@ -34,6 +34,7 @@ enum BluetoothData: Equatable {
     case image(Data)
     case text(Data)
     case binary(Data)
+    case unknown
     
     static func <> (left: BluetoothData, right: BluetoothData) -> Bool {
         switch (left, right) {

@@ -10,6 +10,7 @@ import RxSwift
 import RxCocoa
 import Toast
 import RxMediaPicker
+import SnapKit
 
 class CentralViewController: UIViewController {
     private let disposeBag = DisposeBag()
@@ -21,6 +22,7 @@ class CentralViewController: UIViewController {
     @IBOutlet weak var characteristicStatusLabel: UILabel!
     @IBOutlet weak var desciptorStatusLabel: UILabel!
     @IBOutlet weak var receivedDataLabel: UILabel!
+    @IBOutlet weak var receiveDataImageView: UIImageView!
     
     //TEST - echo: 0x24, 0xBF, 0x01, 0x01, 0x3D, 0x05 (body length), body data
     
@@ -66,13 +68,23 @@ class CentralViewController: UIViewController {
             self.connectionStatusLabel.text = String(describing: state)
         }).disposed(by: disposeBag)
         
-        viewModel.receivedData.subscribe(onNext: { data in
+        viewModel.receivedData.drive(onNext: { data in
             // TODO: 데이터를 이어받던게 완료되면 들어온다. 따라서, 프로그래스 형식을 구현하려면 여기서는 안됨.
             if case .image(let data) = data {
                 
                 let textContainImageSize = "image size: \(data.count) bytes"
                 log.verbose("UI - receive \(textContainImageSize)")
-                self.receivedDataLabel.text = textContainImageSize
+                
+                if let image = UIImage(data: data) {
+                    let ratio: CGFloat = image.size.height / image.size.width
+                    self.receiveDataImageView.image = UIImage(data: data)
+                    let height = self.receiveDataImageView.frame.size.width * ratio
+                    self.receiveDataImageView.snp.makeConstraints { make in
+                        make.height.equalTo(height)
+                    }
+                    self.receiveDataImageView.frame.size.height = self.receiveDataImageView.frame.size.width * ratio
+                    self.receiveDataImageView.sizeToFit()
+                }
                 
             } else if case .text(let data) = data {
                 

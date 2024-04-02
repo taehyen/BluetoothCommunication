@@ -53,7 +53,7 @@ protocol CentralViewModelInputs {
 protocol CentralViewModelOutputs {
     var error: Observable<CentralError> { get }
     var connected: Observable<BluetoothCentralState> { get }
-    var receivedData: Observable<BluetoothData> { get }
+    var receivedData: Driver<BluetoothData> { get }
     var serviceInfo: Observable<String> { get }
     var characteristicInfo: Observable<String> { get }
     var descriptorInfo: Observable<String> { get }
@@ -131,19 +131,19 @@ extension CentralViewModel: CentralViewModelOutputs {
         errorSubject.asObservable().compactMap { $0 }
     }
     
-    public var connected: Observable<BluetoothCentralState> {
+    var connected: Observable<BluetoothCentralState> {
         connectedSubject.asObservable()
     }
-    public var receivedData: Observable<BluetoothData> {
-        receiveDataSubject.asObservable()
+    var receivedData: Driver<BluetoothData> {
+        receiveDataSubject.asDriver(onErrorJustReturn: .unknown)
     }
-    public var serviceInfo: Observable<String> {
+    var serviceInfo: Observable<String> {
         serviceInfoSubject.asObservable()
     }
-    public var characteristicInfo: Observable<String> {
+    var characteristicInfo: Observable<String> {
         characteristicInfoSubject.asObservable()
     }
-    public var descriptorInfo: Observable<String> {
+    var descriptorInfo: Observable<String> {
         descriptorInfoSubject.asObservable()
     }
 }
@@ -542,7 +542,6 @@ extension CentralViewModel: CBPeripheralDelegate {
         
         let stringFromData = String(data: characteristicData, encoding: .utf8)
         log.verbose("received data length : \(characteristicData.count)")
-        log.verbose("bytes: \(String(describing: stringFromData))")
         
         //메시지 끝 토큰을 받게 되면
         if stringFromData == "EOM" {
