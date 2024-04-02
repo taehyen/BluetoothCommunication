@@ -26,10 +26,7 @@ class PeripheralViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        bindUI()
-        bindData()
-        
+
         textView.delegate = self
         textView.text = ""
         
@@ -37,12 +34,16 @@ class PeripheralViewController: UIViewController {
         selectImageButton.setTitleColor(.blue, for: .normal)
         selectImageButton.setTitle("Unselect Image", for: .selected)
         selectImageButton.setTitleColor(.white, for: .selected)
+        
+        bindUI()
+        bindData()
+        
+        viewModel.inputs.initPeripheral()
     }
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
-        viewModel.inputs.initPeripheral()
         viewModel.inputs.start()
     }
     
@@ -80,13 +81,13 @@ extension PeripheralViewController: UITextViewDelegate {
         let rightButton = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(dismissKeyboard))
         navigationItem.rightBarButtonItem = rightButton
         
-        viewModel.inputs.stop()
+//        viewModel.inputs.stop()
     }
     
     func textViewDidEndEditing(_ textView: UITextView) {
         viewModel.inputs.send(data: .text(textView.text.data(using: .utf8)!))
         
-        viewModel.inputs.start()
+//        viewModel.inputs.start()
     }
     
     @objc

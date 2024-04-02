@@ -32,12 +32,19 @@ protocol PeripheralViewModelOutputs {
     var receivedData: Observable<BluetoothData> { get }
 }
 
+class Weak<T: AnyObject> {
+    weak var value: T?
+    init(_ value: T) {
+        self.value = value
+    }
+}
+
 // MARK: - ViewModel
 class PeripheralViewModel: NSObject, PeripheralViewModelType {
     var disposeBag = DisposeBag()
     
     private var peripheralManager: CBPeripheralManager!
-    private var allServices: [CustomService] = []
+    private var allServices: [Weak<CustomService>] = []
     private var dataToReceive = Data()
 
     private let errorSubject: PublishSubject<PeripheralError?> = .init()
@@ -78,13 +85,14 @@ extension PeripheralViewModel: PeripheralViewModelInputs {
         log.verbose("send(data: \(data))")
         
         if case .image(let data) = data {
-            if let service = self.allServices.filter({ $0 is ImageTransferService }).first {
-                service.dataToSend = data
-                service.sendData()
+            if let service = self.allServices.filter({ $0.value is ImageTransferService }).first {
+                service.value?.dataToSend = data
+                service.value?.sendData()
             }
         } else if case .text(let data) = data {
-            if let service = self.allServices.filter({ $0 is TextTransferService }).first {
-                service.dataToSend = data
+            if let service = self.allServices.filter({ $0.value is TextTransferService }).first {
+                service.value?.dataToSend = data
+                service.value?.sendData()
             }
         }
     }
@@ -129,9 +137,9 @@ private extension PeripheralViewModel {
         
         // And add it to the peripheral manager.
         peripheralManager.add(transferService1)
-        allServices.append(transferService1)
+        allServices.append(Weak<CustomService>(transferService1))
         peripheralManager.add(transferService2)
-        allServices.append(transferService2)
+        allServices.append(Weak<CustomService>(transferService2))
     }
     
     private func finalPeripheralManager() {
@@ -209,14 +217,17 @@ extension PeripheralViewModel: CBPeripheralManagerDelegate {
         
         peripheralManager.setDesiredConnectionLatency(.low, for: central)
         
+        allServices.removeAll(where: { $0.value == nil })
+        
         // Start sending if it has some data to send.
         allServices.forEach {
+            guard let value = $0.value else { return }
             // save central
-            $0.connectedCentral = central
+            value.connectedCentral = central
             
-            if $0.dataToSend.count > 0 {
-                $0.sendDataIndex = 0
-                $0.sendData()
+            if value.dataToSend.count > 0 {
+                value.sendDataIndex = 0
+                value.sendData()
             }
         }
     }
@@ -228,8 +239,9 @@ extension PeripheralViewModel: CBPeripheralManagerDelegate {
         log.verbose("Central unsubscribed from characteristic")
         
         allServices.forEach {
+            guard let value = $0.value else { return }
             // save central
-            $0.connectedCentral = nil
+            value.connectedCentral = nil
         }
     }
     
@@ -239,7 +251,7 @@ extension PeripheralViewModel: CBPeripheralManagerDelegate {
      */
     func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {
         // Start sending again
-        allServices.forEach { $0.sendData() }
+        allServices.forEach { $0.value?.sendData() }
     }
     
     /*
@@ -252,8 +264,8 @@ extension PeripheralViewModel: CBPeripheralManagerDelegate {
                 continue
             }
             
-            if let service = allServices.filter({ $0.transferCharacteristic?.uuid == aRequest.characteristic.uuid }).first {
-                if service.type == .imageOnly {
+            if let service = allServices.filter({ $0.value?.transferCharacteristic?.uuid == aRequest.characteristic.uuid }).first {
+                if service.value?.type == .imageOnly {
                     let stringFromData = String(data: requestValue, encoding: .utf8)
                     log.verbose("image::Received write request of \(requestValue.count) bytes: \(String(describing: stringFromData))")
                     if stringFromData == "EOM" {
@@ -265,7 +277,7 @@ extension PeripheralViewModel: CBPeripheralManagerDelegate {
                     } else {
                         dataToReceive.append(requestValue)
                     }
-                } else if service.type == .textOnly {
+                } else if service.value?.type == .textOnly {
                     let stringFromData = String(data: requestValue, encoding: .utf8)
                     log.verbose("text::Received write request of \(requestValue.count) bytes: \(String(describing: stringFromData))")
                     if stringFromData == "EOM" {
@@ -390,8 +402,9 @@ class CustomService: CBMutableService {
                     
                     sendDataIndex = 0
                     dataToSend.removeAll(keepingCapacity: false)
+                } else {
+                    log.error("Fail to send EOM")
                 }
-                return
             }
         }
     }
