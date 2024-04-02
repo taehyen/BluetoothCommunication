@@ -322,6 +322,33 @@ class CustomService: CBMutableService {
     func setUp() {
     }
     
+    func sendEOM() {
+        guard let peripheralManager = peripheralManager else {
+            return
+        }
+        
+        guard let transferCharacteristic = transferCharacteristic else {
+            return
+        }
+
+        //Send it
+        let eomSent = peripheralManager.updateValue("EOM".data(using: .utf8)!,
+                                                    for: transferCharacteristic, onSubscribedCentrals: nil)
+        
+        if eomSent {
+            // It sent; we're all done
+            sendingEOM = false
+            log.verbose("Sent: EOM")
+            
+            completedSubject.onNext(())
+            
+            sendDataIndex = 0
+            dataToSend.removeAll(keepingCapacity: false)
+        } else {
+            log.error("Fail to send EOM")
+        }
+    }
+    
     func sendData() {
         guard let peripheralManager = peripheralManager else {
             return
@@ -334,13 +361,7 @@ class CustomService: CBMutableService {
         // First up, check if we're meant to be sending an EOM
         if sendingEOM {
             // send it
-            let didSend = peripheralManager.updateValue("EOM".data(using: .utf8)!, for: transferCharacteristic, onSubscribedCentrals: nil)
-            // Did it send?
-            if didSend {
-                // It did, so mark it as sent
-                sendingEOM = false
-                log.verbose("Sent: EOM")
-            }
+            sendEOM()
             // It didn't send, so we'll exit and wait for peripheralManagerIsReadyToUpdateSubscribers to call sendData again
             return
         }
@@ -389,22 +410,7 @@ class CustomService: CBMutableService {
                 // Set this so if the send fails, we'll send it next time
                 sendingEOM = true
                 
-                //Send it
-                let eomSent = peripheralManager.updateValue("EOM".data(using: .utf8)!,
-                                                            for: transferCharacteristic, onSubscribedCentrals: nil)
-                
-                if eomSent {
-                    // It sent; we're all done
-                    sendingEOM = false
-                    log.verbose("Sent: EOM")
-                    
-                    completedSubject.onNext(())
-                    
-                    sendDataIndex = 0
-                    dataToSend.removeAll(keepingCapacity: false)
-                } else {
-                    log.error("Fail to send EOM")
-                }
+                sendEOM()
             }
         }
     }
