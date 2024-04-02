@@ -41,6 +41,8 @@ class CentralViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
+        UIApplication.shared.isIdleTimerDisabled = true
+        
         viewModel.inputs.initCentral()
 
         self.view.makeToast("Begin Central Mode")
@@ -48,6 +50,8 @@ class CentralViewController: UIViewController {
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        
+        UIApplication.shared.isIdleTimerDisabled = false
         
         viewModel.inputs.finalCentral()
     }

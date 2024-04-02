@@ -44,11 +44,15 @@ class PeripheralViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
+        UIApplication.shared.isIdleTimerDisabled = true
+        
         viewModel.inputs.start()
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        
+        UIApplication.shared.isIdleTimerDisabled = false
         
         viewModel.inputs.stop()
         viewModel.inputs.finalPeripheral()
