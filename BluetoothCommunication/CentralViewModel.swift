@@ -52,7 +52,7 @@ protocol CentralViewModelInputs {
 
 protocol CentralViewModelOutputs {
     var error: Observable<CentralError> { get }
-    var connected: Observable<BluetoothCentralState> { get }
+    var status: Observable<BluetoothCentralState> { get }
     var receivedData: Driver<BluetoothData> { get }
     var serviceInfo: Observable<String> { get }
     var characteristicInfo: Observable<String> { get }
@@ -69,7 +69,7 @@ class CentralViewModel: NSObject, CentralViewModelType {
     private var transferImageCharacteristic: CBCharacteristic?
     
     
-    private var connectedSubject: PublishSubject<BluetoothCentralState> = .init()
+    private var statusSubject: PublishSubject<BluetoothCentralState> = .init()
     private var receiveDataSubject: PublishSubject<BluetoothData> = .init()
     private var errorSubject: PublishSubject<CentralError> = .init()
     
@@ -131,8 +131,8 @@ extension CentralViewModel: CentralViewModelOutputs {
         errorSubject.asObservable().compactMap { $0 }
     }
     
-    var connected: Observable<BluetoothCentralState> {
-        connectedSubject.asObservable()
+    var status: Observable<BluetoothCentralState> {
+        statusSubject.asObservable()
     }
     var receivedData: Driver<BluetoothData> {
         receiveDataSubject.asDriver(onErrorJustReturn: .unknown)
@@ -179,7 +179,7 @@ private extension CentralViewModel {
         centralManager.stopScan()
 //        log.verbose("Scanning stopped")
         
-        connectedSubject.onNext(.disconnected)
+        statusSubject.onNext(.disconnected)
         
         dataToSend.removeAll(keepingCapacity: false)
         imageToReceive.removeAll(keepingCapacity: false)
@@ -204,7 +204,7 @@ private extension CentralViewModel {
         log.verbose("Found connected Peripherals with transfer service: \(connectedPeripherals)")
         
         if let connectedPeripheral = connectedPeripherals.last {
-            connectedSubject.onNext(.connected)
+            statusSubject.onNext(.connected)
             
             log.verbose("Connecting to peripheral \(connectedPeripheral)")
 
@@ -212,7 +212,7 @@ private extension CentralViewModel {
             centralManager.connect(connectedPeripheral, options: nil)
             
         } else {
-            connectedSubject.onNext(.scanning)
+            statusSubject.onNext(.scanning)
             
             centralManager.delegate = self
             
@@ -241,7 +241,7 @@ private extension CentralViewModel {
             ready()
         }
 
-        connectedSubject.onNext(.disconnected)
+        statusSubject.onNext(.disconnected)
     }
     
     // 주변 장치에 일부 테스트 데이터 쓰기
@@ -256,7 +256,7 @@ private extension CentralViewModel {
             return
         }
         
-        connectedSubject.onNext(.sendingData)
+        statusSubject.onNext(.sendingData)
         
         if case .image(let data) = data {
             if let transferCharacteristic = transferImageCharacteristic {
@@ -328,7 +328,7 @@ extension CentralViewModel: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {
-        connectedSubject.onNext(.recovery)
+        statusSubject.onNext(.recovery)
         
         // 이전에 연결된 주변 장치 복원
         if let restoredPeripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] {
@@ -358,7 +358,7 @@ extension CentralViewModel: CBCentralManagerDelegate {
         }
         
         if peripheral.state == .disconnected {
-            connectedSubject.onNext(.reconnecting)
+            statusSubject.onNext(.reconnecting)
             log.verbose("Connecting to peripheral \(peripheral)")
             centralManager.connect(peripheral, options: nil)
         } else {
@@ -378,7 +378,7 @@ extension CentralViewModel: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
-        connectedSubject.onNext(.failToConnected)
+        statusSubject.onNext(.failToConnected)
         
         log.warning("Failed to connect to \(peripheral). \(String(describing: error))")
         
@@ -387,7 +387,7 @@ extension CentralViewModel: CBCentralManagerDelegate {
     
     //주변기기와 연결했으니 이제 '전송' 특성을 찾기 위해 서비스와 특성을 찾아야 합니다.
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        connectedSubject.onNext(.connected)
+        statusSubject.onNext(.connected)
         
         log.verbose("Peripheral Connected")
         
@@ -406,7 +406,7 @@ extension CentralViewModel: CBCentralManagerDelegate {
     //연결이 끊어지면 주변 장치의 로컬 복사본을 정리해야 합니다.
     //5+
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        connectedSubject.onNext(.disconnected)
+        statusSubject.onNext(.disconnected)
         log.verbose("didDisconnectPeripheral: \(peripheral)")
         
         ready()
@@ -449,7 +449,7 @@ extension CentralViewModel: CBPeripheralDelegate {
             return
         }
         
-        connectedSubject.onNext(.didDiscoverService)
+        statusSubject.onNext(.didDiscoverService)
         
         log.verbose("CALL peripheral.discoverCharacteristics")
         
@@ -475,7 +475,7 @@ extension CentralViewModel: CBPeripheralDelegate {
             return
         }
         
-        connectedSubject.onNext(.didDiscoverCharacteristic)
+        statusSubject.onNext(.didDiscoverCharacteristic)
         
         //다시 한 번, 만약을 대비해 배열을 반복하고 그것이 올바른지 확인합니다.
         guard let serviceCharacteristics = service.characteristics else {
@@ -495,7 +495,7 @@ extension CentralViewModel: CBPeripheralDelegate {
 
                 peripheral.discoverDescriptors(for: characteristic)
                 
-                connectedSubject.onNext(.subscribing)
+                statusSubject.onNext(.subscribing)
                 
             } else if characteristic.uuid == TransferService.imageCharacteristicUUID {
                 transferImageCharacteristic = characteristic
@@ -506,12 +506,12 @@ extension CentralViewModel: CBPeripheralDelegate {
 
                 peripheral.discoverDescriptors(for: characteristic)
                 
-                connectedSubject.onNext(.subscribing)
+                statusSubject.onNext(.subscribing)
             }
         }
         
         //이 작업이 완료되면 데이터가 들어올 때까지 기다리면 됩니다.
-        connectedSubject.onNext(.waitingReceiveData)
+        statusSubject.onNext(.waitingReceiveData)
     }
     
     func peripheral(_ peripheral: CBPeripheral, didDiscoverDescriptorsFor characteristic: CBCharacteristic, error: (any Error)?) {
@@ -523,7 +523,7 @@ extension CentralViewModel: CBPeripheralDelegate {
             peripheral.readValue(for: descriptor)
             
             log.verbose("descriptor = \(descriptor)")
-            connectedSubject.onNext(.receivingDescriptor)
+            statusSubject.onNext(.receivingDescriptor)
         }
     }
     
@@ -536,7 +536,7 @@ extension CentralViewModel: CBPeripheralDelegate {
         }
         
         guard let characteristicData = characteristic.value else {
-            connectedSubject.onNext(.receivingEmptyData)
+            statusSubject.onNext(.receivingEmptyData)
             return
         }
         
@@ -556,7 +556,7 @@ extension CentralViewModel: CBPeripheralDelegate {
                 textToReceive.removeAll(keepingCapacity: false)
             }
 
-            connectedSubject.onNext(.receiveCompleted)
+            statusSubject.onNext(.receiveCompleted)
         } else {
             if characteristic == transferTextCharacteristic {
                 //그렇지 않으면 이전에 받은 데이터에 데이터를 추가하면 됩니다.
@@ -566,12 +566,12 @@ extension CentralViewModel: CBPeripheralDelegate {
                 imageToReceive.append(characteristicData)
             }
 
-            connectedSubject.onNext(.receivingData)
+            statusSubject.onNext(.receivingData)
         }
     }
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor descriptor: CBDescriptor, error: Error?) {
-        connectedSubject.onNext(.receivingDescriptor)
+        statusSubject.onNext(.receivingDescriptor)
         
         descriptorInfoSubject.onNext("\(descriptor.uuid)")
         

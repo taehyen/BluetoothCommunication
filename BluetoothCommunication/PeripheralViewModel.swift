@@ -10,6 +10,15 @@ import RxSwift
 import RxCocoa
 import CoreBluetooth
 
+enum BluetoothPeripheralState: String {
+    case powerOn
+    case advertising
+    case connected
+    case sendingData
+    case idle
+    case disconnected
+}
+
 enum PeripheralError: Error {
     
 }
@@ -24,12 +33,17 @@ protocol PeripheralViewModelInputs {
     func finalPeripheral()
     func start()
     func stop()
+    
     func send(data: BluetoothData)
+    func spt001()
+    func spt003()
+    func spt006()
 }
 
 protocol PeripheralViewModelOutputs {
     var error: Observable<PeripheralError> { get }
-    var receivedData: Observable<BluetoothData> { get }
+    var status: Observable<BluetoothPeripheralState> { get }
+    var receivedData: Driver<BluetoothData> { get }
 }
 
 class Weak<T: AnyObject> {
@@ -48,7 +62,8 @@ class PeripheralViewModel: NSObject, PeripheralViewModelType {
     private var dataToReceive = Data()
 
     private let errorSubject: PublishSubject<PeripheralError?> = .init()
-    private let receivedDataSubject: PublishSubject<BluetoothData> = .init()
+    private var statusSubject: PublishSubject<BluetoothPeripheralState> = .init()
+    private var receiveDataSubject: PublishSubject<BluetoothData> = .init()
 
     override init() {
         super.init()
@@ -83,7 +98,7 @@ extension PeripheralViewModel: PeripheralViewModelInputs {
     
     func send(data: BluetoothData) {
         log.verbose("send(data: \(data))")
-        
+
         if case .image(let data) = data {
             if let service = self.allServices.filter({ $0.value is ImageTransferService }).first {
                 service.value?.dataToSend = data
@@ -94,7 +109,33 @@ extension PeripheralViewModel: PeripheralViewModelInputs {
                 service.value?.dataToSend = data
                 service.value?.sendData()
             }
+        } else if case .binary(let packet) = data {
+            if let service = self.allServices.filter({ $0.value is BinaryTransferService }).first {
+                service.value?.packetToSend = packet
+                service.value?.send(packet: packet)
+            }
         }
+    }
+
+    func spt001() {
+        let data = "spt001_test".data(using: .utf8)!
+        let bytes = [UInt8](data)
+        let packet = Packet(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x01, bodyLength: UInt8(bytes.count), body: bytes)
+        send(data: .binary(packet))
+    }
+
+    func spt003() {
+        let data = "spt003_test".data(using: .utf8)!
+        let bytes = [UInt8](data)
+        let packet = Packet(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x03, bodyLength: UInt8(bytes.count), body: bytes)
+        send(data: .binary(packet))
+    }
+
+    func spt006() {
+        let data = "spt006_test".data(using: .utf8)!
+        let bytes = [UInt8](data)
+        let packet = Packet(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x06, bodyLength: UInt8(bytes.count), body: bytes)
+        send(data: .binary(packet))
     }
 }
 
@@ -103,9 +144,13 @@ extension PeripheralViewModel: PeripheralViewModelOutputs {
     var error: Observable<PeripheralError> {
         errorSubject.asObservable().compactMap { $0 }
     }
+
+    var status: Observable<BluetoothPeripheralState> {
+        statusSubject.asObservable()
+    }
     
-    var receivedData: Observable<BluetoothData> {
-        receivedDataSubject.asObservable()
+    var receivedData: Driver<BluetoothData> {
+        receiveDataSubject.asDriver(onErrorJustReturn: .unknown)
     }
 }
 
@@ -135,11 +180,22 @@ private extension PeripheralViewModel {
             log.verbose("text sent!")
         }).disposed(by: disposeBag)
         
+        let transferService3 = BinaryTransferService(type: TransferService.serviceUUID, primary: true)
+        transferService3.peripheralManager = peripheralManager
+        transferService3.completion.subscribe(onNext: { _ in
+            log.verbose("binary sent!")
+        }).disposed(by: disposeBag)
+        
+        
         // And add it to the peripheral manager.
         peripheralManager.add(transferService1)
         allServices.append(Weak<CustomService>(transferService1))
+        
         peripheralManager.add(transferService2)
         allServices.append(Weak<CustomService>(transferService2))
+        
+        peripheralManager.add(transferService3)
+        allServices.append(Weak<CustomService>(transferService3))
     }
     
     private func finalPeripheralManager() {
@@ -147,18 +203,24 @@ private extension PeripheralViewModel {
         
         allServices.removeAll(keepingCapacity: false)
         peripheralManager.removeAllServices()
+        
+        statusSubject.onNext(.disconnected)
     }
     
     private func startAdvertising() {
         log.verbose("startAdvertising")
         peripheralManager.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [TransferService.serviceUUID],
                                                CBAdvertisementDataLocalNameKey: TransferService.peripheralName])
+        
+        statusSubject.onNext(.advertising)
     }
     
     private func stopAdvertising() {
         log.verbose("stopAdvertising")
         // 우리가 표시되지 않는 동안 광고를 계속하지 마십시오.
         peripheralManager.stopAdvertising()
+        
+        statusSubject.onNext(.idle)
     }
 }
 
@@ -168,19 +230,14 @@ extension PeripheralViewModel: CBPeripheralManagerDelegate {
         
         switch peripheral.state {
             case .poweredOn:
-                // ... so start working with the peripheral
                 log.verbose("CBManager is powered on")
+                statusSubject.onNext(.powerOn)
                 setupPeripheral()
             case .poweredOff:
                 log.verbose("CBManager is not powered on")
-                // In a real app, you'd deal with all the states accordingly
-                return
             case .resetting:
                 log.verbose("CBManager is resetting")
-                // In a real app, you'd deal with all the states accordingly
-                return
             case .unauthorized:
-                // In a real app, you'd deal with all the states accordingly
                 if #available(iOS 13.0, *) {
                     switch peripheral.authorization {
                         case .denied:
@@ -193,19 +250,12 @@ extension PeripheralViewModel: CBPeripheralManagerDelegate {
                 } else {
                     // Fallback on earlier versions
                 }
-                return
             case .unknown:
                 log.verbose("CBManager state is unknown")
-                // In a real app, you'd deal with all the states accordingly
-                return
             case .unsupported:
                 log.verbose("Bluetooth is not supported on this device")
-                // In a real app, you'd deal with all the states accordingly
-                return
             @unknown default:
                 log.verbose("A previously unknown peripheral manager state occurred")
-                // In a real app, you'd deal with yet unknown cases that might occur in the future
-                return
         }
     }
     
@@ -221,13 +271,22 @@ extension PeripheralViewModel: CBPeripheralManagerDelegate {
         
         // Start sending if it has some data to send.
         allServices.forEach {
-            guard let value = $0.value else { return }
+            guard let service = $0.value else { return }
             // save central
-            value.connectedCentral = central
+            service.connectedCentral = central
             
-            if value.dataToSend.count > 0 {
-                value.sendDataIndex = 0
-                value.sendData()
+            switch service.type {
+                case .imageOnly, .textOnly:
+                    if service.dataToSend.count > 0 {
+                        service.sendDataIndex = 0
+                        service.sendData()
+                    }
+                case .binaryOnly:
+                    if let packet = service.packetToSend {
+                        service.send(packet: packet)
+                    }
+                default:
+                    return
             }
         }
     }
@@ -271,7 +330,7 @@ extension PeripheralViewModel: CBPeripheralManagerDelegate {
                     if stringFromData == "EOM" {
                         log.verbose("Receive EOM")
                                                 
-                        self.receivedDataSubject.onNext(.image(dataToReceive))
+                        self.receiveDataSubject.onNext(.image(dataToReceive))
                         
                         dataToReceive.removeAll(keepingCapacity: false)
                     } else {
@@ -283,12 +342,16 @@ extension PeripheralViewModel: CBPeripheralManagerDelegate {
                     if stringFromData == "EOM" {
                         log.verbose("Receive EOM")
                         
-                        self.receivedDataSubject.onNext(.text(requestValue))
+                        self.receiveDataSubject.onNext(.text(requestValue))
                         
                         dataToReceive.removeAll(keepingCapacity: false)
                     } else {
                         dataToReceive.append(requestValue)
                     }
+                } else if service.value?.type == .binaryOnly {
+                    let packet = Packet(bytes: [UInt8](requestValue)) //TODO: 데이터가 제대로 들어오는지 확인해야 함.
+                    self.receiveDataSubject.onNext(.binary(packet))
+                    dataToReceive.removeAll(keepingCapacity: false)
                 }
             }
         }
@@ -303,8 +366,9 @@ class CustomService: CBMutableService {
     weak var connectedCentral: CBCentral?
     
     var type: ServiceType = .notDefined
-    var sendingEOM = false
+    private var sendingEOM = false
     
+    var packetToSend: Packet?
     var dataToSend = Data()
     var sendDataIndex: Int = 0
     
@@ -320,9 +384,10 @@ class CustomService: CBMutableService {
     }
     
     func setUp() {
+        //자식 클래스에서 사용
     }
     
-    func sendEOM() {
+    private func sendEOM() {
         guard let peripheralManager = peripheralManager else {
             return
         }
@@ -347,6 +412,24 @@ class CustomService: CBMutableService {
         } else {
             log.error("Fail to send EOM")
         }
+    }
+    
+    func send(packet: Packet) {
+        guard let peripheralManager = peripheralManager else {
+            return
+        }
+        
+        guard let transferCharacteristic = transferCharacteristic else {
+            return
+        }
+        
+        let data = Data(bytes: packet.body, count: Int(packet.bodyLength))
+        //보낼때
+        let didSend = peripheralManager.updateValue(packet.data, for: transferCharacteristic, onSubscribedCentrals: nil)
+        
+        log.info("didSend: \(didSend)")
+        
+        completedSubject.onNext(())
     }
     
     func sendData() {
@@ -418,6 +501,8 @@ class CustomService: CBMutableService {
 
 class ImageTransferService: CustomService {
     override func setUp() {
+        type = .imageOnly
+        
         let characteristic = CBMutableCharacteristic(type: TransferService.imageCharacteristicUUID,
                                                      properties: [.indicate, .writeWithoutResponse, .read],
                                                      value: nil,
@@ -431,7 +516,23 @@ class ImageTransferService: CustomService {
 
 class TextTransferService: CustomService {
     override func setUp() {
+        type = .textOnly
+        
         let characteristic = CBMutableCharacteristic(type: TransferService.textCharacteristicUUID,
+                                                     properties: [.indicate, .writeWithoutResponse, .read],
+                                                     value: nil,
+                                                     permissions: [.readable, .writeable])
+        transferCharacteristic = characteristic
+        // Add the characteristic to the service.
+        characteristics = [characteristic]
+    }
+}
+
+class BinaryTransferService: CustomService {
+    override func setUp() {
+        type = .binaryOnly
+        
+        let characteristic = CBMutableCharacteristic(type: TransferService.binaryCharacteristicUUID,
                                                      properties: [.indicate, .writeWithoutResponse, .read],
                                                      value: nil,
                                                      permissions: [.readable, .writeable])

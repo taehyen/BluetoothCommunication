@@ -63,7 +63,7 @@ class CentralViewController: UIViewController {
             self.view.makeToast("error: \(error)")
         }).disposed(by: disposeBag)
         
-        viewModel.connected.subscribe(onNext: { state in
+        viewModel.status.subscribe(onNext: { state in
             // TODO: 그런데, 연결상태를 내부에서 구현해야 함.
             self.connectionStatusLabel.text = String(describing: state)
         }).disposed(by: disposeBag)
@@ -92,6 +92,10 @@ class CentralViewController: UIViewController {
                 log.verbose("UI - receive: \(text)")
                 self.receivedDataLabel.text = text
                 
+            } else if case .binary(let packet) = data {
+                let string = String(bytes: packet.body, encoding: .utf8)
+                log.verbose("UI - receive: \(string)")
+                self.receivedDataLabel.text = string
             }
             
         }).disposed(by: disposeBag)
