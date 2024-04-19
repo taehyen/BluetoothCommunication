@@ -48,6 +48,10 @@ protocol CentralViewModelInputs {
     func initCentral()
     func finalCentral()
     func send(data: BluetoothData)
+    func spt002()
+    func spt004()
+    func spt005()
+    func spt007()
 }
 
 protocol CentralViewModelOutputs {
@@ -67,7 +71,7 @@ class CentralViewModel: NSObject, CentralViewModelType {
     /// CBPeripherialDelegate 내에서 주로 사용되어지며, peripheral로 전송하려는 특성을 나타낸다.
     private var transferTextCharacteristic: CBCharacteristic?
     private var transferImageCharacteristic: CBCharacteristic?
-    
+    private var transferBinaryCharacteristic: CBCharacteristic?
     
     private var statusSubject: PublishSubject<BluetoothCentralState> = .init()
     private var receiveDataSubject: PublishSubject<BluetoothData> = .init()
@@ -121,6 +125,34 @@ extension CentralViewModel: CentralViewModelInputs {
         dataToSend.append(data)
         
         writeData()
+    }
+    
+    func spt002() {
+        let data = "spt002_test".data(using: .utf8)!
+        let bytes = [UInt8](data)
+        let packet = Packet(protocolVersion: 0x01, commandGroup: 0x02, commandId: 0x02, bodyLength: UInt8(bytes.count), body: bytes)
+        send(data: .binary(packet))
+    }
+    
+    func spt004() {
+        let data = "spt004_test".data(using: .utf8)!
+        let bytes = [UInt8](data)
+        let packet = Packet(protocolVersion: 0x01, commandGroup: 0x02, commandId: 0x04, bodyLength: UInt8(bytes.count), body: bytes)
+        send(data: .binary(packet))
+    }
+    
+    func spt005() {
+        let data = "spt005_test".data(using: .utf8)!
+        let bytes = [UInt8](data)
+        let packet = Packet(protocolVersion: 0x01, commandGroup: 0x02, commandId: 0x05, bodyLength: UInt8(bytes.count), body: bytes)
+        send(data: .binary(packet))
+    }
+    
+    func spt007() {
+        let data = "spt007_test".data(using: .utf8)!
+        let bytes = [UInt8](data)
+        let packet = Packet(protocolVersion: 0x01, commandGroup: 0x02, commandId: 0x07, bodyLength: UInt8(bytes.count), body: bytes)
+        send(data: .binary(packet))
     }
 }
 
@@ -268,11 +300,10 @@ private extension CentralViewModel {
                 // 완료된 반복 횟수와 주변 장치가 더 많은 데이터를 수용할 수 있는지 확인하십시오.
                 peripheral.write(data: data, characteristic: transferCharacteristic)
             }
-        } else if case .binary(_) = data {
-//            if let transferCharacteristic = transferImageCharacteristic {
-//                // 완료된 반복 횟수와 주변 장치가 더 많은 데이터를 수용할 수 있는지 확인하십시오.
-//                peripheral.write(data: data, characteristic: transferCharacteristic)
-//            }
+        } else if case .binary(let packet) = data {
+            if let transferCharacteristic = transferBinaryCharacteristic {
+                peripheral.write(packet: packet, characteristic: transferCharacteristic)
+            }
         } else {
             log.error("Characteristic is not ready.")
             errorSubject.onNext(.emptyCharacteristic)
@@ -455,7 +486,8 @@ extension CentralViewModel: CBPeripheralDelegate {
         
         for service in peripheralServices {
             peripheral.discoverCharacteristics([TransferService.textCharacteristicUUID,
-                                                TransferService.imageCharacteristicUUID], for: service)
+                                                TransferService.imageCharacteristicUUID,
+                                                TransferService.binaryCharacteristicUUID], for: service)
             
             log.verbose("service = \(service)")
             serviceInfoSubject.onNext("\(service.uuid)")
@@ -504,6 +536,17 @@ extension CentralViewModel: CBPeripheralDelegate {
                 
                 peripheral.setNotifyValue(true, for: characteristic)
 
+                peripheral.discoverDescriptors(for: characteristic)
+                
+                statusSubject.onNext(.subscribing)
+            } else if characteristic.uuid == TransferService.binaryCharacteristicUUID {
+                
+                transferBinaryCharacteristic = characteristic
+                
+                characteristicInfoSubject.onNext("\(characteristic.uuid)")
+                
+                peripheral.setNotifyValue(true, for: characteristic)
+                
                 peripheral.discoverDescriptors(for: characteristic)
                 
                 statusSubject.onNext(.subscribing)
@@ -558,15 +601,18 @@ extension CentralViewModel: CBPeripheralDelegate {
 
             statusSubject.onNext(.receiveCompleted)
         } else {
+            statusSubject.onNext(.receivingData)
+            
             if characteristic == transferTextCharacteristic {
                 //그렇지 않으면 이전에 받은 데이터에 데이터를 추가하면 됩니다.
                 textToReceive.append(characteristicData)
             } else if characteristic == transferImageCharacteristic {
                 //그렇지 않으면 이전에 받은 데이터에 데이터를 추가하면 됩니다.
                 imageToReceive.append(characteristicData)
+            } else if characteristic == transferBinaryCharacteristic {
+                let packet = Packet(bytes: [UInt8](characteristicData))
+                receiveDataSubject.onNext(.binary(packet))
             }
-
-            statusSubject.onNext(.receivingData)
         }
     }
     
@@ -624,6 +670,24 @@ extension CBPeripheral {
                     setNotifyValue(false, for: characteristic)
                 }
             }
+        }
+    }
+    
+    func write(packet: Packet, characteristic: CBCharacteristic) {
+        // 완료된 반복 횟수와 주변 장치가 더 많은 데이터를 수용할 수 있는지 확인하십시오.
+        while self.canSendWriteWithoutResponse {
+            let mtu = self.maximumWriteValueLength (for: .withoutResponse)
+            var rawPacket = [UInt8]()
+            
+            let data = packet.data
+            
+            let bytesToCopy: size_t = min(mtu, data.count)
+            data.copyBytes(to: &rawPacket, count: bytesToCopy)
+            let packetData = Data(bytes: &rawPacket, count: bytesToCopy)
+            
+            self.writeValue(packetData, for: characteristic, type: .withoutResponse)
+            
+            log.verbose("Writing \(bytesToCopy) bytes.")
         }
     }
     

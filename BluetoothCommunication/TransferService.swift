@@ -104,7 +104,7 @@ extension Packet {
             log.error("header가 잘못되었음.")
             return
         }
-        let protocolVersion = bytes[2]
+        protocolVersion = bytes[2]
         guard gSpotProtocolVersion == protocolVersion else {
             log.error("version이 다름")
             return

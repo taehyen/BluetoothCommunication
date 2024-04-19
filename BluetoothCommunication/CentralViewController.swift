@@ -28,6 +28,10 @@ class CentralViewController: UIViewController {
     
     @IBOutlet weak var test1Button: UIButton!
     @IBOutlet weak var test2Button: UIButton!
+    @IBOutlet weak var test3Button: UIButton!
+    @IBOutlet weak var test4Button: UIButton!
+    @IBOutlet weak var test5Button: UIButton!
+    @IBOutlet weak var test6Button: UIButton!
     
     lazy var picker: RxMediaPicker = {
         RxMediaPicker(delegate: self)
@@ -125,6 +129,26 @@ class CentralViewController: UIViewController {
         test2Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
             .subscribe(onNext: { _ in
                 self.selectImage()
+            }).disposed(by: disposeBag)
+        
+        test3Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
+            .subscribe(onNext: { _ in
+                self.viewModel.inputs.spt002()
+            }).disposed(by: disposeBag)
+        
+        test4Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
+            .subscribe(onNext: { _ in
+                self.viewModel.inputs.spt004()
+            }).disposed(by: disposeBag)
+        
+        test5Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
+            .subscribe(onNext: { _ in
+                self.viewModel.inputs.spt005()
+            }).disposed(by: disposeBag)
+        
+        test6Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
+            .subscribe(onNext: { _ in
+                self.viewModel.inputs.spt007()
             }).disposed(by: disposeBag)
     }
 }

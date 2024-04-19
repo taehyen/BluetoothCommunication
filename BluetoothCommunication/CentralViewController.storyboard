@@ -163,12 +163,12 @@
                                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="N5T-yH-20K">
                                                                 <rect key="frame" x="0.0" y="0.0" width="196.66666666666666" height="34.333333333333336"/>
                                                                 <state key="normal" title="Button"/>
-                                                                <buttonConfiguration key="configuration" style="plain" title="Button"/>
+                                                                <buttonConfiguration key="configuration" style="plain" title="spt002"/>
                                                             </button>
                                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Vlr-Zb-eBS">
                                                                 <rect key="frame" x="196.66666666666663" y="0.0" width="196.33333333333337" height="34.333333333333336"/>
                                                                 <state key="normal" title="Button"/>
-                                                                <buttonConfiguration key="configuration" style="plain" title="Button"/>
+                                                                <buttonConfiguration key="configuration" style="plain" title="spt004"/>
                                                             </button>
                                                         </subviews>
                                                     </stackView>
@@ -178,12 +178,12 @@
                                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="8Tc-r7-uy0">
                                                                 <rect key="frame" x="0.0" y="0.0" width="196.66666666666666" height="34.333333333333336"/>
                                                                 <state key="normal" title="Button"/>
-                                                                <buttonConfiguration key="configuration" style="plain" title="Button"/>
+                                                                <buttonConfiguration key="configuration" style="plain" title="spt005"/>
                                                             </button>
                                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Jvp-b6-5xm">
                                                                 <rect key="frame" x="196.66666666666663" y="0.0" width="196.33333333333337" height="34.333333333333336"/>
                                                                 <state key="normal" title="Button"/>
-                                                                <buttonConfiguration key="configuration" style="plain" title="Button"/>
+                                                                <buttonConfiguration key="configuration" style="plain" title="spt007"/>
                                                             </button>
                                                         </subviews>
                                                     </stackView>
@@ -274,6 +274,10 @@
                         <outlet property="serviceStatusLabel" destination="lgE-1M-Wdv" id="dGX-Ut-cz6"/>
                         <outlet property="test1Button" destination="JGn-Wa-FMS" id="qAa-bQ-qN9"/>
                         <outlet property="test2Button" destination="FkN-gU-2Ha" id="nAw-lT-A6Q"/>
+                        <outlet property="test3Button" destination="N5T-yH-20K" id="DDT-9j-51y"/>
+                        <outlet property="test4Button" destination="Vlr-Zb-eBS" id="vV8-bd-mKd"/>
+                        <outlet property="test5Button" destination="8Tc-r7-uy0" id="b64-Ea-Uto"/>
+                        <outlet property="test6Button" destination="Jvp-b6-5xm" id="QEy-ll-XNh"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="Ief-a0-LHa" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
