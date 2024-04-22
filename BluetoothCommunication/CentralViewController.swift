@@ -97,9 +97,11 @@ class CentralViewController: UIViewController {
                 self.receivedDataLabel.text = text
                 
             } else if case .binary(let packet) = data {
-                let string = String(bytes: packet.body, encoding: .utf8)
-                log.verbose("UI - receive: \(string)")
-                self.receivedDataLabel.text = string
+                
+                let doubleArray = Packet.convertUInt8ArrayToDoubles(packet.body)
+                log.verbose("UI - receive: \(doubleArray)")
+                self.receivedDataLabel.text = "\(doubleArray)"
+                
             }
             
         }).disposed(by: disposeBag)

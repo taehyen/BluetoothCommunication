@@ -125,3 +125,36 @@ extension Packet {
         log.verbose("정상적으로 Packet데이터가 설정됨.")
     }
 }
+
+extension Packet {
+    //받을 때
+    static func convertUInt8ArrayToDoubles(_ uint8Array: [UInt8]) -> [Double] {
+        var doubleArray = [Double]()
+        
+        for i in stride(from: 0, to: uint8Array.count, by: 8) {
+            // 8개의 UInt8 요소를 하나의 64비트 정수로 변환
+            let uint64Value = uint8Array[i..<i+8].withUnsafeBytes { $0.load(as: UInt64.self) }
+            
+            // 64비트 정수를 Double로 변환
+            let doubleValue = Double(bitPattern: uint64Value)
+            
+            doubleArray.append(doubleValue)
+        }
+        
+        return doubleArray
+    }
+    //보낼 때
+    static func convertDoublesToUInt8Array(_ doubleArray: [Double]) -> [UInt8] {
+        var uint8Array = [UInt8]()
+        
+        for doubleValue in doubleArray {
+            // Double 값의 바이트 표현을 UInt64로 변환
+            let uint64Value = doubleValue.bitPattern
+            
+            // UInt64를 8개의 UInt8 요소로 분할하여 배열에 추가
+            uint8Array += withUnsafeBytes(of: uint64Value) { Array($0) }
+        }
+        
+        return uint8Array
+    }
+}

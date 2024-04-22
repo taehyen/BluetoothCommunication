@@ -149,8 +149,17 @@ extension CentralViewModel: CentralViewModelInputs {
     }
     
     func spt007() {
-        let data = "spt007_test".data(using: .utf8)!
-        let bytes = [UInt8](data)
+        var doubleArray: [Double] = []
+        doubleArray.append(99.0)    //360카메라 배터리 상태
+        doubleArray.append(80.0)    //아이폰 배터리 상태
+//        doubleArray.append(0x01)    //iphone and 360
+//        doubleArray.append(0x00)    //vpn
+        var bytes = Packet.convertDoublesToUInt8Array(doubleArray)
+        bytes.append(0x01)  //iphone and 360
+        bytes.append(0x00)  //vpn
+        
+//        let data = "spt007_test".data(using: .utf8)!
+//        let bytes = [UInt8](data)
         let packet = Packet(protocolVersion: 0x01, commandGroup: 0x02, commandId: 0x07, bodyLength: UInt8(bytes.count), body: bytes)
         send(data: .binary(packet))
     }
