@@ -90,11 +90,16 @@ class PeripheralViewController: UIViewController {
                 self.receivedDataLabel.text = text
                 
             } else if case .binary(let packet) = data {
-                let data = Data(bytes: packet.body, count: Int(packet.bodyLength))
-                if let string = String(data: data, encoding: .utf8) {
-                    self.receivedDataLabel.text = "received: \(string)"
+                if packet.body.count > 8 {
+                    let doubleArray = Packet.convertUInt8ArrayToDoubles(packet.body)
+                    log.verbose("UI - receive: \(doubleArray)")
+                    self.receivedDataLabel.text = "\(doubleArray)"
                 } else {
-                    log.error("received data = \(data)")
+                    var result = ""
+                    packet.body.forEach { uint8Value in
+                        result.append("\(uint8Value) ")
+                    }
+                    self.receivedDataLabel.text = result
                 }
             }
             

@@ -131,9 +131,15 @@ extension Packet {
     static func convertUInt8ArrayToDoubles(_ uint8Array: [UInt8]) -> [Double] {
         var doubleArray = [Double]()
         
-        for i in stride(from: 0, to: uint8Array.count, by: 8) {
+        // 길이를 8의 배수로 맞추기 위해 필요한 패딩 추가
+        var paddedArray = uint8Array
+        while paddedArray.count % 8 != 0 {
+            paddedArray.append(0)
+        }
+        
+        for i in stride(from: 0, to: paddedArray.count, by: 8) {
             // 8개의 UInt8 요소를 하나의 64비트 정수로 변환
-            let uint64Value = uint8Array[i..<i+8].withUnsafeBytes { $0.load(as: UInt64.self) }
+            let uint64Value = paddedArray[i..<i+8].withUnsafeBytes { $0.load(as: UInt64.self) }
             
             // 64비트 정수를 Double로 변환
             let doubleValue = Double(bitPattern: uint64Value)

@@ -73,6 +73,10 @@ class CentralViewController: UIViewController {
         }).disposed(by: disposeBag)
         
         viewModel.receivedData.drive(onNext: { data in
+            self.receiveDataImageView.image = nil
+            self.receivedDataLabel.text = ""
+            self.receiveDataImageView.isHidden = true
+            
             // TODO: 데이터를 이어받던게 완료되면 들어온다. 따라서, 프로그래스 형식을 구현하려면 여기서는 안됨.
             if case .image(let data) = data {
                 
@@ -86,6 +90,7 @@ class CentralViewController: UIViewController {
                     self.receiveDataImageView.snp.makeConstraints { make in
                         make.height.equalTo(height)
                     }
+                    self.receiveDataImageView.isHidden = false
                     self.receiveDataImageView.frame.size.height = self.receiveDataImageView.frame.size.width * ratio
                     self.receiveDataImageView.sizeToFit()
                 }

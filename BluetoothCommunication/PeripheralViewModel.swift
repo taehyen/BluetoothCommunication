@@ -121,12 +121,30 @@ extension PeripheralViewModel: PeripheralViewModelInputs {
         let data = "spt001_test".data(using: .utf8)!
         let bytes = [UInt8](data)
         let packet = Packet(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x01, bodyLength: UInt8(bytes.count), body: bytes)
-        send(data: .binary(packet))
+        send(data: .text(data))
     }
 
     func spt003() {
-        let data = "spt003_test".data(using: .utf8)!
-        let bytes = [UInt8](data)
+        let bytes: [UInt8] = [
+            // x (8 bytes)
+            0x40, 0x59, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcd,
+            // y (8 bytes)
+            0x40, 0x09, 0x21, 0xfb, 0x54, 0x44, 0x2d, 0x18,
+            // z (8 bytes)
+            0x40, 0x24, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcd,
+            // roll (8 bytes)
+            0x40, 0x34, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcd,
+            // pitch (8 bytes)
+            0x40, 0x44, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcd,
+            // yaw (8 bytes)
+            0x40, 0x54, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcd,
+            // cameraHeight (8 bytes)
+            0x40, 0x64, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcd
+        ]
+        
+        
+//        let data = byteArray.data(using: .utf8)!
+//        let bytes = [UInt8](data)
         let packet = Packet(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x03, bodyLength: UInt8(bytes.count), body: bytes)
         send(data: .binary(packet))
     }
@@ -135,7 +153,7 @@ extension PeripheralViewModel: PeripheralViewModelInputs {
         let data = "spt006_test".data(using: .utf8)!
         let bytes = [UInt8](data)
         let packet = Packet(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x06, bodyLength: UInt8(bytes.count), body: bytes)
-        send(data: .binary(packet))
+        send(data: .text(data))
     }
 }
 
