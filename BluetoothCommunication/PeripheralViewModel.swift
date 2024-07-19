@@ -256,17 +256,21 @@ extension PeripheralViewModel: CBPeripheralManagerDelegate {
             case .resetting:
                 log.verbose("CBManager is resetting")
             case .unauthorized:
+                var authorization: CBManagerAuthorization!
+                
                 if #available(iOS 13.0, *) {
-                    switch peripheral.authorization {
-                        case .denied:
-                            log.verbose("You are not authorized to use Bluetooth")
-                        case .restricted:
-                            log.verbose("Bluetooth is restricted")
-                        default:
-                            log.verbose("Unexpected authorization")
-                    }
+                    authorization = CBPeripheralManager.authorization
                 } else {
-                    // Fallback on earlier versions
+                    authorization = peripheral.authorization
+                }
+                
+                switch authorization {
+                    case .denied:
+                        log.verbose("You are not authorized to use Bluetooth")
+                    case .restricted:
+                        log.verbose("Bluetooth is restricted")
+                    default:
+                        log.verbose("Unexpected authorization")
                 }
             case .unknown:
                 log.verbose("CBManager state is unknown")

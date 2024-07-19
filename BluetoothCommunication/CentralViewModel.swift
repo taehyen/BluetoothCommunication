@@ -324,44 +324,34 @@ extension CentralViewModel: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         switch central.state {
             case .poweredOn:
-                // ... so start working with the peripheral
                 log.verbose("CBManager is powered on")
                 retrievePeripheral()
             case .poweredOff:
                 log.verbose("CBManager is not powered on")
-                // In a real app, you'd deal with all the states accordingly
-                return
             case .resetting:
                 log.verbose("CBManager is resetting")
-                // In a real app, you'd deal with all the states accordingly
-                return
             case .unauthorized:
-                // In a real app, you'd deal with all the states accordingly
+                var authorization: CBManagerAuthorization!
                 if #available(iOS 13.0, *) {
-                    switch central.authorization {
-                        case .denied:
-                            log.verbose("You are not authorized to use Bluetooth")
-                        case .restricted:
-                            log.verbose("Bluetooth is restricted")
-                        default:
-                            log.verbose("Unexpected authorization")
-                    }
+                    authorization = CBCentralManager.authorization
                 } else {
-                    // Fallback on earlier versions
+                    authorization = central.authorization
                 }
-                return
+                
+                switch authorization {
+                    case .denied:
+                        log.verbose("You are not authorized to use Bluetooth")
+                    case .restricted:
+                        log.verbose("Bluetooth is restricted")
+                    default:
+                        log.verbose("Unexpected authorization")
+                }
             case .unknown:
                 log.verbose("CBManager state is unknown")
-                // In a real app, you'd deal with all the states accordingly
-                return
             case .unsupported:
                 log.verbose("Bluetooth is not supported on this device")
-                // In a real app, you'd deal with all the states accordingly
-                return
             @unknown default:
                 log.verbose("A previously unknown central manager state occurred")
-                // In a real app, you'd deal with yet unknown cases that might occur in the future
-                return
         }
     }
     
