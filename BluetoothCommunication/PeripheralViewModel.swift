@@ -118,42 +118,25 @@ extension PeripheralViewModel: PeripheralViewModelInputs {
     }
 
     func spt001() {
-        let data = "spt001_test".data(using: .utf8)!
+        let exampleData = ProjectData(pjtCd: "19ZS", dongCd: "A0026", phseCd: "P021", floorCd: "A0210")
+        let data = serializeProjectData(exampleData)
         let bytes = [UInt8](data)
         let packet = Packet(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x01, bodyLength: UInt8(bytes.count), body: bytes)
-        send(data: .text(data))
+        send(data: .binary(packet))
     }
 
     func spt003() {
-        let bytes: [UInt8] = [
-            // x (8 bytes)
-            0x40, 0x59, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcd,
-            // y (8 bytes)
-            0x40, 0x09, 0x21, 0xfb, 0x54, 0x44, 0x2d, 0x18,
-            // z (8 bytes)
-            0x40, 0x24, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcd,
-            // roll (8 bytes)
-            0x40, 0x34, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcd,
-            // pitch (8 bytes)
-            0x40, 0x44, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcd,
-            // yaw (8 bytes)
-            0x40, 0x54, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcd,
-            // cameraHeight (8 bytes)
-            0x40, 0x64, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcd
-        ]
-        
-        
-//        let data = byteArray.data(using: .utf8)!
-//        let bytes = [UInt8](data)
+        let doubleArray = [Double(-1561.98876953125),  -44.063999176025391, -511.66659545898438, 0.26332375407218933, 0, -0.014338493347167969, 210]
+        let bytes = Packet.convertDoublesToUInt8Array(doubleArray)
         let packet = Packet(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x03, bodyLength: UInt8(bytes.count), body: bytes)
         send(data: .binary(packet))
     }
 
     func spt006() {
-        let data = "spt006_test".data(using: .utf8)!
-        let bytes = [UInt8](data)
+        let data = UInt8(0x00)
+        let bytes: [UInt8] = [data]
         let packet = Packet(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x06, bodyLength: UInt8(bytes.count), body: bytes)
-        send(data: .text(data))
+        send(data: .binary(packet))
     }
 }
 
@@ -528,7 +511,7 @@ class ImageTransferService: CustomService {
         let characteristic = CBMutableCharacteristic(type: TransferService.imageCharacteristicUUID,
                                                      properties: [.indicate, .writeWithoutResponse, .read],
                                                      value: nil,
-                                                     permissions: [.readable, .writeable])
+                                                     permissions: [.readEncryptionRequired, .writeEncryptionRequired])
         transferCharacteristic = characteristic
         // Add the characteristic to the service.
         characteristics = [characteristic]
@@ -543,7 +526,7 @@ class TextTransferService: CustomService {
         let characteristic = CBMutableCharacteristic(type: TransferService.textCharacteristicUUID,
                                                      properties: [.indicate, .writeWithoutResponse, .read],
                                                      value: nil,
-                                                     permissions: [.readable, .writeable])
+                                                     permissions: [.readEncryptionRequired, .writeEncryptionRequired])
         transferCharacteristic = characteristic
         // Add the characteristic to the service.
         characteristics = [characteristic]
@@ -562,4 +545,35 @@ class BinaryTransferService: CustomService {
         // Add the characteristic to the service.
         characteristics = [characteristic]
     }
+}
+
+// 데이터 구조 정의
+struct ProjectData {
+    let pjtCd: String
+    let dongCd: String
+    let phseCd: String
+    let floorCd: String
+}
+
+// 문자열을 직렬화하는 함수
+func serializeString(_ string: String) -> Data {
+    var data = Data()
+    let length = UInt8(string.count)
+    data.append(length)
+    if let stringData = string.data(using: .utf8) {
+        data.append(stringData)
+    }
+    return data
+}
+
+// 전체 데이터를 직렬화하는 함수
+func serializeProjectData(_ projectData: ProjectData) -> Data {
+    var data = Data()
+    
+    data.append(serializeString(projectData.pjtCd))
+    data.append(serializeString(projectData.dongCd))
+    data.append(serializeString(projectData.phseCd))
+    data.append(serializeString(projectData.floorCd))
+    
+    return data
 }

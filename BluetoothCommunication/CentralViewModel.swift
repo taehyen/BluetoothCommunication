@@ -708,3 +708,53 @@ extension CBPeripheral {
         log.verbose("Writing EOM")
     }
 }
+
+
+// 데이터 구조 정의
+//struct ProjectData {
+//    let pjtCd: String
+//    let dongCd: String
+//    let phseCd: String
+//    let floorCd: String
+//}
+
+// 문자열을 디시리얼라이즈하는 함수
+//func deserializeString(from data: inout Data) -> String? {
+//    guard data.count > 0 else { return nil }
+//    
+//    // 첫 번째 바이트는 문자열의 길이
+//    let length = Int(data.removeFirst())
+//    
+//    // 그 다음은 문자열 데이터
+//    guard data.count >= length else { return nil }
+//    
+//    let stringData = data.prefix(length)
+//    data.removeFirst(length)
+//    
+//    return String(data: stringData, encoding: .utf8)
+//}
+//
+//// 전체 데이터를 디시리얼라이즈하는 함수
+//func deserializeProjectData(from data: Data) -> ProjectData? {
+//    var mutableData = data
+//    
+//    guard let pjtCd = deserializeString(from: &mutableData),
+//          let dongCd = deserializeString(from: &mutableData),
+//          let phseCd = deserializeString(from: &mutableData),
+//          let floorCd = deserializeString(from: &mutableData) else {
+//        return nil
+//    }
+//    
+//    return ProjectData(pjtCd: pjtCd, dongCd: dongCd, phseCd: phseCd, floorCd: floorCd)
+//}
+//
+//// 예시 데이터 직렬화
+//let exampleData = ProjectData(pjtCd: "PJT123", dongCd: "D01", phseCd: "P1", floorCd: "F01")
+//let serializedData = serializeProjectData(exampleData)
+//
+//// 직렬화된 데이터를 다시 디시리얼라이즈
+//if let deserializedData = deserializeProjectData(from: serializedData) {
+//    print("Deserialized Data: \(deserializedData)")
+//} else {
+//    print("Failed to deserialize data")
+//}

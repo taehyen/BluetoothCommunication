@@ -9,21 +9,28 @@ import XCTest
 @testable import BluetoothCommunication
 
 final class BluetoothCommunicationTests: XCTestCase {
+    
+    let peripheralViewModel = PeripheralViewModel()
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.
+        peripheralViewModel.start()
     }
 
     override func tearDownWithError() throws {
         // Put teardown code here. This method is called after the invocation of each test method in the class.
     }
+    
+    func testSend001() throws {
+        peripheralViewModel.spt001()
+    }
+    
+    func testSend003() throws {
+        peripheralViewModel.spt003()
+    }
 
-    func testExample() throws {
-        // This is an example of a functional test case.
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // Any test you write for XCTest can be annotated as throws and async.
-        // Mark your test throws to produce an unexpected failure when your test encounters an uncaught error.
-        // Mark your test async to allow awaiting for asynchronous code to complete. Check the results with assertions afterwards.
+    func testSend006() throws {
+        peripheralViewModel.spt006()
     }
 
     func testPerformanceExample() throws {
