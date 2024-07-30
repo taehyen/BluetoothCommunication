@@ -428,7 +428,7 @@ class CustomService: CBMutableService {
             return
         }
         
-        let data = Data(bytes: packet.body, count: Int(packet.bodyLength))
+//        let data = Data(bytes: packet.body, count: Int(packet.bodyLength))
         //보낼때
         let didSend = peripheralManager.updateValue(packet.data, for: transferCharacteristic, onSubscribedCentrals: nil)
         
@@ -509,9 +509,9 @@ class ImageTransferService: CustomService {
         type = .imageOnly
         
         let characteristic = CBMutableCharacteristic(type: TransferService.imageCharacteristicUUID,
-                                                     properties: [.indicate, .writeWithoutResponse, .read],
+                                                     properties: [.writeWithoutResponse, .read],
                                                      value: nil,
-                                                     permissions: [.readEncryptionRequired, .writeEncryptionRequired])
+                                                     permissions: [.readable, .writeable])
         transferCharacteristic = characteristic
         // Add the characteristic to the service.
         characteristics = [characteristic]
@@ -524,9 +524,9 @@ class TextTransferService: CustomService {
         type = .textOnly
         
         let characteristic = CBMutableCharacteristic(type: TransferService.textCharacteristicUUID,
-                                                     properties: [.indicate, .writeWithoutResponse, .read],
+                                                     properties: [.writeWithoutResponse, .read],
                                                      value: nil,
-                                                     permissions: [.readEncryptionRequired, .writeEncryptionRequired])
+                                                     permissions: [.readable, .writeable])
         transferCharacteristic = characteristic
         // Add the characteristic to the service.
         characteristics = [characteristic]
@@ -537,10 +537,11 @@ class BinaryTransferService: CustomService {
     override func setUp() {
         type = .binaryOnly
         
+        // Set properties and permissions of CBMutableCharacteristic to require encryption.
         let characteristic = CBMutableCharacteristic(type: TransferService.binaryCharacteristicUUID,
-                                                     properties: [.indicate, .writeWithoutResponse, .read],
+                                                     properties: [.notifyEncryptionRequired, .writeWithoutResponse, .read],
                                                      value: nil,
-                                                     permissions: [.readable, .writeable])
+                                                     permissions: [.readEncryptionRequired, .writeEncryptionRequired])
         transferCharacteristic = characteristic
         // Add the characteristic to the service.
         characteristics = [characteristic]

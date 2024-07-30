@@ -486,14 +486,7 @@ extension CentralViewModel: CBPeripheralDelegate {
                                                 TransferService.imageCharacteristicUUID,
                                                 TransferService.binaryCharacteristicUUID], for: service)
             
-            log.verbose("service = \(service)")
             serviceInfoSubject.onNext("\(service.uuid)")
-            
-            if let characteristics = service.characteristics {
-                log.verbose("service.characteristics = \(characteristics)")
-            } else {
-                log.verbose("service.characteristics is nil")
-            }
         }
     }
     
@@ -503,7 +496,7 @@ extension CentralViewModel: CBPeripheralDelegate {
             cleanup()
             return
         }
-        
+                
         statusSubject.onNext(.didDiscoverCharacteristic)
         
         //다시 한 번, 만약을 대비해 배열을 반복하고 그것이 올바른지 확인합니다.
@@ -514,6 +507,8 @@ extension CentralViewModel: CBPeripheralDelegate {
 
         //찾는 특성이 나오면 이 루프 안에서 구독하는 처리를 한다.
         for characteristic in serviceCharacteristics {
+            log.verbose("service.characteristics = \(characteristic)")
+            
             
             if characteristic.uuid == TransferService.textCharacteristicUUID {
                 transferTextCharacteristic = characteristic
@@ -545,6 +540,12 @@ extension CentralViewModel: CBPeripheralDelegate {
                 peripheral.setNotifyValue(true, for: characteristic)
                 
                 peripheral.discoverDescriptors(for: characteristic)
+                
+//                if characteristic.properties.contains(.notifyEncryptionRequired) {
+//                    log.info("*** \(characteristic.properties.rawValue) \(characteristic.uuid), \(characteristic.description): true ***")
+//                } else {
+//                    log.info("*** \(characteristic.properties.rawValue) \(characteristic.uuid), \(characteristic.description): false ***")
+//                }
                 
                 statusSubject.onNext(.subscribing)
             }
@@ -626,6 +627,7 @@ extension CentralViewModel: CBPeripheralDelegate {
         if let error = error {
             log.error("Error changing notification state: \(error.localizedDescription)")
             return
+            
         }
 
         // 전송 특성이 아닐 경우 종료
@@ -649,7 +651,6 @@ extension CentralViewModel: CBPeripheralDelegate {
     //응답 없이 쓰기를 사용할 때 주변기기가 더 많은 데이터를 받아들일 준비가 되었을 때 호출됩니다.
     func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {
         log.verbose("Peripheral is ready, send data")
-        
         writeData()
     }
 }
@@ -704,7 +705,6 @@ extension CBPeripheral {
         }
         
         self.writeValue("EOM".data(using: .utf8)!, for: characteristic, type: .withoutResponse)
-        
         log.verbose("Writing EOM")
     }
 }
