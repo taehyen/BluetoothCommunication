@@ -64,6 +64,8 @@ class PeripheralViewModel: NSObject, PeripheralViewModelType {
     private let errorSubject: PublishSubject<PeripheralError?> = .init()
     private var statusSubject: PublishSubject<BluetoothPeripheralState> = .init()
     private var receiveDataSubject: PublishSubject<BluetoothData> = .init()
+    
+    let spotProxyServer = SpotProxyServer.shared
 
     override init() {
         super.init()
@@ -99,18 +101,8 @@ extension PeripheralViewModel: PeripheralViewModelInputs {
     func send(data: BluetoothData) {
         log.verbose("send(data: \(data))")
 
-        if case .image(let data) = data {
-            if let service = self.allServices.filter({ $0.value is ImageTransferService }).first {
-                service.value?.dataToSend = data
-                service.value?.sendData()
-            }
-        } else if case .text(let data) = data {
-            if let service = self.allServices.filter({ $0.value is TextTransferService }).first {
-                service.value?.dataToSend = data
-                service.value?.sendData()
-            }
-        } else if case .binary(let packet) = data {
-            if let service = self.allServices.filter({ $0.value is BinaryTransferService }).first {
+        if case .binary(let packet) = data {
+            if let service = self.allServices.filter({ $0.value is SenderService }).first {
                 service.value?.packetToSend = packet
                 service.value?.send(packet: packet)
             }
@@ -118,24 +110,25 @@ extension PeripheralViewModel: PeripheralViewModelInputs {
     }
 
     func spt001() {
-        let exampleData = ProjectData(pjtCd: "19ZS", dongCd: "A0026", phseCd: "P021", floorCd: "A0210")
+//        let exampleData = ProjectData(pjtCd: "19ZS", dongCd: "A0026", phseCd: "-", floorCd: "A0210")
+        let exampleData = ProjectData(pjtCd: "19SC", dongCd: "A0001", phseCd: "-", floorCd: "A0206")
         let data = serializeProjectData(exampleData)
         let bytes = [UInt8](data)
-        let packet = Packet(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x01, bodyLength: UInt8(bytes.count), body: bytes)
+        let packet = SpotPacket(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x01, bodyLength: UInt8(bytes.count), body: bytes)
         send(data: .binary(packet))
     }
 
     func spt003() {
         let doubleArray = [Double(-1561.98876953125),  -44.063999176025391, -511.66659545898438, 0.26332375407218933, 0, -0.014338493347167969, 210]
-        let bytes = Packet.convertDoublesToUInt8Array(doubleArray)
-        let packet = Packet(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x03, bodyLength: UInt8(bytes.count), body: bytes)
+        let bytes = SpotPacket.convertDoublesToUInt8Array(doubleArray)
+        let packet = SpotPacket(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x03, bodyLength: UInt8(bytes.count), body: bytes)
         send(data: .binary(packet))
     }
 
     func spt006() {
         let data = UInt8(0x00)
         let bytes: [UInt8] = [data]
-        let packet = Packet(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x06, bodyLength: UInt8(bytes.count), body: bytes)
+        let packet = SpotPacket(protocolVersion: 0x01, commandGroup: 0x01, commandId: 0x06, bodyLength: UInt8(bytes.count), body: bytes)
         send(data: .binary(packet))
     }
 }
@@ -169,34 +162,24 @@ private extension PeripheralViewModel {
     
     private func setupPeripheral() {
         // Create a service from the characteristic.
-        let transferService1 = ImageTransferService(type: TransferService.serviceUUID, primary: true)
-        transferService1.peripheralManager = peripheralManager
-        transferService1.completion.subscribe(onNext: { _ in
-            log.verbose("image sent!")
+        let senderService = SenderService(type: TransferService.serviceUUID, primary: true)
+        senderService.peripheralManager = peripheralManager
+        senderService.completion.subscribe(onNext: { _ in
+            log.verbose("send data")
         }).disposed(by: disposeBag)
         
-        let transferService2 = TextTransferService(type: TransferService.serviceUUID, primary: true)
-        transferService2.peripheralManager = peripheralManager
-        transferService2.completion.subscribe(onNext: { _ in
-            log.verbose("text sent!")
+        let receiverService = ReceiverService(type: TransferService.serviceUUID, primary: true)
+        receiverService.peripheralManager = peripheralManager
+        receiverService.completion.subscribe(onNext: { _ in
+            log.verbose("receive data")
         }).disposed(by: disposeBag)
-        
-        let transferService3 = BinaryTransferService(type: TransferService.serviceUUID, primary: true)
-        transferService3.peripheralManager = peripheralManager
-        transferService3.completion.subscribe(onNext: { _ in
-            log.verbose("binary sent!")
-        }).disposed(by: disposeBag)
-        
-        
+                    
         // And add it to the peripheral manager.
-        peripheralManager.add(transferService1)
-        allServices.append(Weak<CustomService>(transferService1))
+        peripheralManager.add(senderService)
+        allServices.append(Weak<CustomService>(senderService))
         
-        peripheralManager.add(transferService2)
-        allServices.append(Weak<CustomService>(transferService2))
-        
-        peripheralManager.add(transferService3)
-        allServices.append(Weak<CustomService>(transferService3))
+        peripheralManager.add(receiverService)
+        allServices.append(Weak<CustomService>(receiverService))
     }
     
     private func finalPeripheralManager() {
@@ -280,18 +263,10 @@ extension PeripheralViewModel: CBPeripheralManagerDelegate {
             // save central
             service.connectedCentral = central
             
-            switch service.type {
-                case .imageOnly, .textOnly:
-                    if service.dataToSend.count > 0 {
-                        service.sendDataIndex = 0
-                        service.sendData()
-                    }
-                case .binaryOnly:
-                    if let packet = service.packetToSend {
-                        service.send(packet: packet)
-                    }
-                default:
-                    return
+            if service.type == .write {
+                if let packet = service.packetToSend {
+                    service.send(packet: packet)
+                }
             }
         }
     }
@@ -329,32 +304,8 @@ extension PeripheralViewModel: CBPeripheralManagerDelegate {
             }
             
             if let service = allServices.filter({ $0.value?.transferCharacteristic?.uuid == aRequest.characteristic.uuid }).first {
-                if service.value?.type == .imageOnly {
-                    let stringFromData = String(data: requestValue, encoding: .utf8)
-                    log.verbose("image::Received write request of \(requestValue.count) bytes: \(String(describing: stringFromData))")
-                    if stringFromData == "EOM" {
-                        log.verbose("Receive EOM")
-                                                
-                        self.receiveDataSubject.onNext(.image(dataToReceive))
-                        
-                        dataToReceive.removeAll(keepingCapacity: false)
-                    } else {
-                        dataToReceive.append(requestValue)
-                    }
-                } else if service.value?.type == .textOnly {
-                    let stringFromData = String(data: requestValue, encoding: .utf8)
-                    log.verbose("text::Received write request of \(requestValue.count) bytes: \(String(describing: stringFromData))")
-                    if stringFromData == "EOM" {
-                        log.verbose("Receive EOM")
-                        
-                        self.receiveDataSubject.onNext(.text(requestValue))
-                        
-                        dataToReceive.removeAll(keepingCapacity: false)
-                    } else {
-                        dataToReceive.append(requestValue)
-                    }
-                } else if service.value?.type == .binaryOnly {
-                    let packet = Packet(bytes: [UInt8](requestValue)) //TODO: 데이터가 제대로 들어오는지 확인해야 함.
+                if service.value?.type == .read {
+                    let packet = SpotPacket(bytes: [UInt8](requestValue)) //TODO: 데이터가 제대로 들어오는지 확인해야 함.
                     self.receiveDataSubject.onNext(.binary(packet))
                     dataToReceive.removeAll(keepingCapacity: false)
                 }
@@ -370,10 +321,10 @@ class CustomService: CBMutableService {
     weak var peripheralManager: CBPeripheralManager?
     weak var connectedCentral: CBCentral?
     
-    var type: ServiceType = .notDefined
+    var type: ServiceType = .read
     private var sendingEOM = false
     
-    var packetToSend: Packet?
+    var packetToSend: SpotPacket?
     var dataToSend = Data()
     var sendDataIndex: Int = 0
     
@@ -419,7 +370,7 @@ class CustomService: CBMutableService {
         }
     }
     
-    func send(packet: Packet) {
+    func send(packet: SpotPacket) {
         guard let peripheralManager = peripheralManager else {
             return
         }
@@ -504,14 +455,14 @@ class CustomService: CBMutableService {
     }
 }
 
-class ImageTransferService: CustomService {
+class SenderService: CustomService {
     override func setUp() {
-        type = .imageOnly
+        type = .read
         
-        let characteristic = CBMutableCharacteristic(type: TransferService.imageCharacteristicUUID,
-                                                     properties: [.writeWithoutResponse, .read],
+        let characteristic = CBMutableCharacteristic(type: TransferService.serverRxCharacteristicUUID,
+                                                     properties: [.read, .notify],
                                                      value: nil,
-                                                     permissions: [.readable, .writeable])
+                                                     permissions: [.readable, .readEncryptionRequired])
         transferCharacteristic = characteristic
         // Add the characteristic to the service.
         characteristics = [characteristic]
@@ -519,29 +470,14 @@ class ImageTransferService: CustomService {
     }
 }
 
-class TextTransferService: CustomService {
+class ReceiverService: CustomService {
     override func setUp() {
-        type = .textOnly
+        type = .write
         
-        let characteristic = CBMutableCharacteristic(type: TransferService.textCharacteristicUUID,
-                                                     properties: [.writeWithoutResponse, .read],
+        let characteristic = CBMutableCharacteristic(type: TransferService.serverTxCharacteristicUUID,
+                                                     properties: [.write, .writeWithoutResponse],
                                                      value: nil,
-                                                     permissions: [.readable, .writeable])
-        transferCharacteristic = characteristic
-        // Add the characteristic to the service.
-        characteristics = [characteristic]
-    }
-}
-
-class BinaryTransferService: CustomService {
-    override func setUp() {
-        type = .binaryOnly
-        
-        // Set properties and permissions of CBMutableCharacteristic to require encryption.
-        let characteristic = CBMutableCharacteristic(type: TransferService.binaryCharacteristicUUID,
-                                                     properties: [.notifyEncryptionRequired, .writeWithoutResponse, .read],
-                                                     value: nil,
-                                                     permissions: [.readEncryptionRequired, .writeEncryptionRequired])
+                                                     permissions: [.writeable, .writeEncryptionRequired])
         transferCharacteristic = characteristic
         // Add the characteristic to the service.
         characteristics = [characteristic]

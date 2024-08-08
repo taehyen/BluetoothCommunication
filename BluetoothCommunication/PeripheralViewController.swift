@@ -91,7 +91,7 @@ class PeripheralViewController: UIViewController {
                 
             } else if case .binary(let packet) = data {
                 if packet.body.count > 8 {
-                    let doubleArray = Packet.convertUInt8ArrayToDoubles(packet.body)
+                    let doubleArray = SpotPacket.convertUInt8ArrayToDoubles(packet.body)
                     log.verbose("UI - receive: \(doubleArray)")
                     self.receivedDataLabel.text = "\(doubleArray)"
                 } else {
@@ -107,30 +107,17 @@ class PeripheralViewController: UIViewController {
     }
     
     private func bindUI() {
-        test1Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
-            .subscribe(onNext: { _ in
-                if let data = "test string".data(using: .utf8) {
-                    self.view.makeToast("send : test string")
-                    self.viewModel.send(data: .text(data))
-                }
-            }).disposed(by: disposeBag)
-        
-        test2Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
-            .subscribe(onNext: { _ in
-                self.selectImage()
-            }).disposed(by: disposeBag)
-        
-        test3Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
+        test3Button.rx.tap.throttle(.seconds(1), latest: false, scheduler: MainScheduler.instance)
             .subscribe(onNext: { _ in
                 self.viewModel.inputs.spt001()
             }).disposed(by: disposeBag)
         
-        test4Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
+        test4Button.rx.tap.throttle(.seconds(1), latest: false, scheduler: MainScheduler.instance)
             .subscribe(onNext: { _ in
                 self.viewModel.inputs.spt003()
             }).disposed(by: disposeBag)
         
-        test5Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
+        test5Button.rx.tap.throttle(.seconds(1), latest: false, scheduler: MainScheduler.instance)
             .subscribe(onNext: { _ in
                 self.viewModel.inputs.spt006()
             }).disposed(by: disposeBag)
@@ -144,19 +131,6 @@ extension PeripheralViewController: RxMediaPickerDelegate {
     
     func dismiss(picker: UIImagePickerController) {
         picker.dismiss(animated: true)
-    }
-
-    func selectImage() {
-        picker.selectImage().subscribe(onNext: { (image, editedImage) in
-            guard let image = editedImage != nil ? editedImage : image else {
-                log.error("all images is nil")
-                return
-            }
-            
-            if let data = image.jpegData(compressionQuality: 0.7) {
-                self.viewModel.send(data: .image(data))
-            }
-        }).disposed(by: disposeBag)
     }
 }
 
