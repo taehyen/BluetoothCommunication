@@ -24,15 +24,16 @@ protocol CentralViewModelInputs {
 
 protocol CentralViewModelOutputs {
     var initialInfo: Observable<SpotInitialInfo> { get }
-    var slamBySpot: Observable<SpotProxyServer.Slam> { get }
+    var slamBySpot: Observable<CentralProxyServer.Slam> { get }
     var endCapture: Observable<Bool> { get }
     var connected: Observable<Bool> { get }
+    var bluetoothInfo: Observable<(String, String, String)> { get }
 }
 
 class CentralViewModel: NSObject, CentralViewModelType {
     private let disposeBag = DisposeBag()
     
-    let spotProxyServer = SpotProxyServer.shared
+    let spotProxyServer = CentralProxyServer.shared
     
     var sceneId = UUID().uuidString.lowercased()
     var newSceneId = UUID().uuidString.lowercased()
@@ -52,19 +53,19 @@ class CentralViewModel: NSObject, CentralViewModelType {
 // MARK: - Inputs
 extension CentralViewModel: CentralViewModelInputs {
     func spt002() {
-        spotProxyServer.spt002(isConnected: true)
+        spotProxyServer.send_spt002(isConnected: true)
     }
     
     func spt004() {
-        spotProxyServer.spt004(true, sceneId: sceneId)
+        spotProxyServer.send_spt004(true, sceneId: sceneId)
     }
     
     func spt005() {
-        spotProxyServer.spt005(true, originSceneId: sceneId, newSceneId: newSceneId)
+        spotProxyServer.send_spt005(true, originSceneId: sceneId, newSceneId: newSceneId)
     }
     
     func spt007() {
-        spotProxyServer.spt007()
+        spotProxyServer.send_spt007()
     }
 }
 
@@ -73,7 +74,7 @@ extension CentralViewModel: CentralViewModelOutputs {
     var initialInfo: Observable<SpotInitialInfo> {
         spotProxyServer.initialInfo
     }
-    var slamBySpot: Observable<SpotProxyServer.Slam> {
+    var slamBySpot: Observable<CentralProxyServer.Slam> {
         spotProxyServer.slamBySpot
     }
     var endCapture: Observable<Bool> {
@@ -81,6 +82,9 @@ extension CentralViewModel: CentralViewModelOutputs {
     }
     var connected: Observable<Bool> {
         spotProxyServer.connected
+    }
+    var bluetoothInfo: Observable<(String, String, String)> {
+        spotProxyServer.bluetoothInfo
     }
 }
 

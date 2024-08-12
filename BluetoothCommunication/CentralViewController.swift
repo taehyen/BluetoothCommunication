@@ -22,16 +22,11 @@ class CentralViewController: UIViewController {
     @IBOutlet weak var characteristicStatusLabel: UILabel!
     @IBOutlet weak var desciptorStatusLabel: UILabel!
     @IBOutlet weak var receivedDataLabel: UILabel!
-    @IBOutlet weak var receiveDataImageView: UIImageView!
-    
-    //TEST - echo: 0x24, 0xBF, 0x01, 0x01, 0x3D, 0x05 (body length), body data
     
     @IBOutlet weak var test1Button: UIButton!
     @IBOutlet weak var test2Button: UIButton!
     @IBOutlet weak var test3Button: UIButton!
     @IBOutlet weak var test4Button: UIButton!
-    @IBOutlet weak var test5Button: UIButton!
-    @IBOutlet weak var test6Button: UIButton!
     
     lazy var picker: RxMediaPicker = {
         RxMediaPicker(delegate: self)
@@ -82,7 +77,7 @@ class CentralViewController: UIViewController {
         }).disposed(by: disposeBag)
         
         viewModel.endCapture.subscribe(onNext: { result in
-            
+            self.receivedDataLabel.text = "end capture"
         }, onError: { error in
             log.error(error.localizedDescription)
         }, onCompleted: {
@@ -100,25 +95,31 @@ class CentralViewController: UIViewController {
         }, onDisposed: {
             log.verbose("endCapture onDisposed")
         }).disposed(by: disposeBag)
+        
+        viewModel.bluetoothInfo.subscribe(onNext: { (serviceId, characteristicId, descriptorId) in
+            self.serviceStatusLabel.text = serviceId
+            self.characteristicStatusLabel.text = characteristicId
+            self.desciptorStatusLabel.text = descriptorId
+        }).disposed(by: disposeBag)
     }
     
     private func bindUI() {
-        test3Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
+        test1Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
             .subscribe(onNext: { _ in
                 self.viewModel.inputs.spt002()
             }).disposed(by: disposeBag)
         
-        test4Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
+        test2Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
             .subscribe(onNext: { _ in
                 self.viewModel.inputs.spt004()
             }).disposed(by: disposeBag)
         
-        test5Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
+        test3Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
             .subscribe(onNext: { _ in
                 self.viewModel.inputs.spt005()
             }).disposed(by: disposeBag)
         
-        test6Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
+        test4Button.rx.tap.throttle(.milliseconds(300), latest: false, scheduler: MainScheduler.instance)
             .subscribe(onNext: { _ in
                 self.viewModel.inputs.spt007()
             }).disposed(by: disposeBag)

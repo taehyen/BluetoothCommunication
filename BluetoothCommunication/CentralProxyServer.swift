@@ -10,45 +10,50 @@ import Foundation
 import RxSwift
 import RxCocoa
 
-private protocol SpotBluetoothInterface {
-	func spt001(packet: SpotPacket) //SPOT이 촬영 요청하기 전 BEAMO 에게 준비하라는 알림
-	func spt002(isConnected: Bool) //BEAMO가 SPOT에게 준비가 완료됨을 알림
-	func spt003(packet: SpotPacket) //SPOT BEAMO에게 촬영 요청
-	func spt004(_ result: Bool, sceneId: String) //BEAMO가 SPOT에게 촬영요청 결과를 응답함
-	func spt005(_ result: Bool, originSceneId: String, newSceneId: String) //BEAMO가 SPOT에게 촬영 데이터 서버 업로드 결과를 알려줌
-	func spt006(packet: SpotPacket) //SPOT이 BEAMO에게 촬영이 종료되었음을 알림
-	func spt007() //BEAMO가 SPOT에게 필요한 상태 정보를 제공
+private protocol CentralCommunicationInterface {
+	func receive_spt001(packet: SpotPacket) //SPOT이 촬영 요청하기 전 BEAMO 에게 준비하라는 알림
+	func send_spt002(isConnected: Bool) //BEAMO가 SPOT에게 준비가 완료됨을 알림
+	func receive_spt003(packet: SpotPacket) //SPOT BEAMO에게 촬영 요청
+	func send_spt004(_ result: Bool, sceneId: String) //BEAMO가 SPOT에게 촬영요청 결과를 응답함
+	func send_spt005(_ result: Bool, originSceneId: String, newSceneId: String) //BEAMO가 SPOT에게 촬영 데이터 서버 업로드 결과를 알려줌
+	func receive_spt006(packet: SpotPacket) //SPOT이 BEAMO에게 촬영이 종료되었음을 알림
+	func send_spt007() //BEAMO가 SPOT에게 필요한 상태 정보를 제공
 }
 
-protocol SpotProxyServerType {
-	var inputs: SpotProxyServerSender { get }
-	var outputs: SpotProxyServerReceiver { get }
+protocol CentralProxyServerType {
+	var inputs: CentralProxyServerSender { get }
+	var outputs: CentralProxyServerReceiver { get }
 }
 
-protocol SpotProxyServerSender {
+protocol CentralProxyServerSender {
 	func sendingStatusReady(isConnected: Bool)
 	func sendingResultCaptured(_ result: Bool, sceneId: String)
 	func sendingResultUploaded(_ result: Bool, originSceneId: String, newSceneId: String)
 	func notifyDeviceStatus()
 }
 
-protocol SpotProxyServerReceiver {
+protocol CentralProxyServerReceiver {
 	var initialInfo: Observable<SpotInitialInfo> { get }
-	var slamBySpot: Observable<SpotProxyServer.Slam> { get }
+	var slamBySpot: Observable<CentralProxyServer.Slam> { get }
 	var endCapture: Observable<Bool> { get }
 	var connected: Observable<Bool> { get }
+    var bluetoothInfo: Observable<(String, String, String)> { get }
 }
 
-class SpotProxyServer {
-	static let shared = SpotProxyServer()
+class CentralProxyServer {
+	static let shared = CentralProxyServer()
 	
 	private let disposeBag = DisposeBag()
 	private let bluetoothCommunicator = BluetoothCentralCommunicator()
 	
 	private var initialInfoSubject: PublishSubject<SpotInitialInfo> = .init()
-	private var slamBySpotSubject: PublishSubject<SpotProxyServer.Slam> = .init()
+	private var slamBySpotSubject: PublishSubject<CentralProxyServer.Slam> = .init()
 	private var endCaptureSubject: PublishSubject<Bool> = .init()
 	private var connectedSubject: PublishSubject<Bool> = .init()
+    
+    private var serviceInfoSubject: PublishSubject<String> = .init()
+    private var characteristicInfoSubject: PublishSubject<String> = .init()
+    private var descriptorInfoSubject: PublishSubject<String> = .init()
 	
 	init() {
 		setUp()
@@ -64,38 +69,38 @@ class SpotProxyServer {
 		bluetoothCommunicator.inputs.initCentral()
 	}
 	
-	var sender: SpotProxyServerSender { self }
-	var receiver: SpotProxyServerReceiver { self }
+	var sender: CentralProxyServerSender { self }
+	var receiver: CentralProxyServerReceiver { self }
 }
 
-extension SpotProxyServer: SpotProxyServerSender {
+extension CentralProxyServer: CentralProxyServerSender {
 	func sendingStatusReady(isConnected: Bool) {
 		log.info("spt002 - isConnected: \(isConnected)")
-		spt002(isConnected: isConnected)
+		send_spt002(isConnected: isConnected)
 	}
 	
 	func sendingResultCaptured(_ result: Bool, sceneId: String) {
 		log.info("spt004 - result: \(result), sceneId: \(sceneId)")
-		spt004(result, sceneId: sceneId)
+		send_spt004(result, sceneId: sceneId)
 	}
 	
 	func sendingResultUploaded(_ result: Bool, originSceneId: String, newSceneId: String) {
 		log.info("spt005 - result: \(result), originSceneId: \(originSceneId), newSceneId: \(newSceneId)")
-		spt005(result, originSceneId: originSceneId, newSceneId: newSceneId)
+		send_spt005(result, originSceneId: originSceneId, newSceneId: newSceneId)
 	}
 	
 	func notifyDeviceStatus() {
 		log.info("spt007")
-		spt007()
+		send_spt007()
 	}
 }
 
-extension SpotProxyServer: SpotProxyServerReceiver {
+extension CentralProxyServer: CentralProxyServerReceiver {
 	var initialInfo: Observable<SpotInitialInfo> {
 		initialInfoSubject.asObservable()
 	}
 	
-	var slamBySpot: Observable<SpotProxyServer.Slam> {
+	var slamBySpot: Observable<CentralProxyServer.Slam> {
 		slamBySpotSubject.asObservable()
 	}
 	
@@ -106,9 +111,13 @@ extension SpotProxyServer: SpotProxyServerReceiver {
 	var connected: Observable<Bool> {
 		connectedSubject.asObservable()
 	}
+    
+    var bluetoothInfo: Observable<(String, String, String)> {
+        Observable.combineLatest(serviceInfoSubject, characteristicInfoSubject, descriptorInfoSubject)
+    }
 }
 
-extension SpotProxyServer: BluetoothCommunicatorDelegate {
+extension CentralProxyServer: BluetoothCentralCommunicatorDelegate {
 	func didReceive(error: CentralError) {
 		log.error(error.localizedDescription)
 	}
@@ -124,11 +133,23 @@ extension SpotProxyServer: BluetoothCommunicatorDelegate {
 	func didUpdate(state: BluetoothCentralState) {
 		log.verbose(state)
 	}
+    
+    func didReceive(serviceInfo: String) {
+        serviceInfoSubject.onNext(serviceInfo)
+    }
+    
+    func didReceive(descriptorInfo: String) {
+        descriptorInfoSubject.onNext(descriptorInfo)
+    }
+    
+    func didReceive(characteristicInfo: String) {
+        characteristicInfoSubject.onNext(characteristicInfo)
+    }
 }
 
-extension SpotProxyServer: SpotBluetoothInterface {
+extension CentralProxyServer: CentralCommunicationInterface {
 	/// SPOT이 촬영 요청하기 전 BEAMO 에게 준비하라는 알림
-	func spt001(packet: SpotPacket) {
+	func receive_spt001(packet: SpotPacket) {
 		/*
 		 pjtCd        : 프로젝트 코드 (ex - 19SC)
 		 dongCd    : 동 코드 (ex - A0001)
@@ -150,7 +171,7 @@ extension SpotProxyServer: SpotBluetoothInterface {
 	}
 	
 	/// BEAMO가 SPOT에게 준비가 완료됨을 알림
-	func spt002(isConnected: Bool) {
+	func send_spt002(isConnected: Bool) {
 		var bytes: [UInt8] = []
 		bytes.append(isConnected == true ? 0x00 : 0x01)
 		
@@ -160,7 +181,7 @@ extension SpotProxyServer: SpotBluetoothInterface {
 	}
 	
 	/// SPOT BEAMO에게 촬영 요청
-	func spt003(packet: SpotPacket) {
+	func receive_spt003(packet: SpotPacket) {
 		let doubleArray = SpotPacket.convertUInt8ArrayToDoubles(packet.body)
 		let x = doubleArray[0]
 		let y = doubleArray[1]
@@ -182,7 +203,7 @@ extension SpotProxyServer: SpotBluetoothInterface {
 	}
 	
 	/// BEAMO가 SPOT에게 촬영요청 결과를 응답함
-	func spt004(_ result: Bool, sceneId: String) {
+	func send_spt004(_ result: Bool, sceneId: String) {
 		var bytes: [UInt8] = []
 		if sceneId.count > 0 {
 			let uuid = sceneId //촬영한 포인트의 uuid
@@ -197,7 +218,7 @@ extension SpotProxyServer: SpotBluetoothInterface {
 	}
 	
 	/// BEAMO가 SPOT에게 촬영 데이터 서버 업로드 결과를 알려줌
-	func spt005(_ result: Bool, originSceneId: String, newSceneId: String) {
+	func send_spt005(_ result: Bool, originSceneId: String, newSceneId: String) {
 		var bytes: [UInt8] = []
 		
 		if originSceneId.count > 0 {
@@ -219,7 +240,7 @@ extension SpotProxyServer: SpotBluetoothInterface {
 	}
 	
 	/// SPOT이 BEAMO에게 촬영이 종료되었음을 알림
-	func spt006(packet: SpotPacket) {
+	func receive_spt006(packet: SpotPacket) {
 		let data = Data(bytes: packet.body, count: Int(packet.bodyLength))
 		
 		guard packet.bodyLength >= 1 else {
@@ -235,7 +256,7 @@ extension SpotProxyServer: SpotBluetoothInterface {
 	}
 	
 	/// BEAMO가 SPOT에게 필요한 상태 정보를 제공
-    func spt007() {
+    func send_spt007() {
         var uint8Array: [UInt8] = []
         uint8Array.append(100)  //360카메라 배터리 상태
         uint8Array.append(100)  //아이폰 배터리 상태
@@ -248,7 +269,7 @@ extension SpotProxyServer: SpotBluetoothInterface {
     }
 }
 
-extension SpotProxyServer {
+extension CentralProxyServer {
 	func receive(bluetoothData: BluetoothData) {
 		if case .binary(let packet) = bluetoothData {
 			receive(packet: packet)
@@ -262,9 +283,9 @@ extension SpotProxyServer {
 		
 		//수신된 데이터에 따라, 각 함수 호출
 		switch (packet.commandGroup, packet.commandId) {
-			case (0x01, 0x01): spt001(packet: packet)
-			case (0x01, 0x03): spt003(packet: packet)
-			case (0x01, 0x06): spt006(packet: packet)
+			case (0x01, 0x01): receive_spt001(packet: packet)
+			case (0x01, 0x03): receive_spt003(packet: packet)
+			case (0x01, 0x06): receive_spt006(packet: packet)
 			default:
 				break
 		}
@@ -307,7 +328,7 @@ extension SpotInitialInfo {
 	}
 }
 
-extension SpotProxyServer {
+extension CentralProxyServer {
 	struct Position: Codable {
 		var x: Double
 		var y: Double

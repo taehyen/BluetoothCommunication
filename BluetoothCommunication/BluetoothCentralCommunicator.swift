@@ -47,7 +47,7 @@ protocol BluetoothCentralCommunicateInputs {
     func send(data: BluetoothData)
 }
 
-protocol BluetoothCommunicatorDelegate {
+protocol BluetoothCentralCommunicatorDelegate {
     func didReceive(data: BluetoothData)
     func didConnected(_ connected: Bool)
     func didUpdate(state: BluetoothCentralState)
@@ -55,19 +55,19 @@ protocol BluetoothCommunicatorDelegate {
     
     func didReceive(serviceInfo: String)
     func didReceive(characteristicInfo: String)
-    func didReceive(descriptorInfp: String)
+    func didReceive(descriptorInfo: String)
 }
 
-extension BluetoothCommunicatorDelegate {
+extension BluetoothCentralCommunicatorDelegate {
     func didReceive(serviceInfo: String) {}
     func didReceive(characteristicInfo: String) {}
-    func didReceive(descriptorInfp: String) {}
+    func didReceive(descriptorInfo: String) {}
 }
 
 let writeType: CBCharacteristicWriteType = .withoutResponse
 
 class BluetoothCentralCommunicator: NSObject, BluetoothCentralCommunicateType {
-    var delegate: BluetoothCommunicatorDelegate?
+    var delegate: BluetoothCentralCommunicatorDelegate?
     
     private var centralManager: CBCentralManager!
     private var discoveredPeripheral: CBPeripheral?
@@ -498,7 +498,7 @@ extension BluetoothCentralCommunicator: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor descriptor: CBDescriptor, error: Error?) {
         delegate?.didUpdate(state: .receivingDescriptor)
         
-        delegate?.didReceive(descriptorInfp: "\(descriptor.uuid)")
+        delegate?.didReceive(descriptorInfo: "\(descriptor.uuid)")
         
         log.verbose("didUpdateValueFor descriptor: \(descriptor)")
     }
