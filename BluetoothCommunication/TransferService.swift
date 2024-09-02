@@ -29,6 +29,7 @@ struct TransferService {
 enum ServiceType {
     case read
     case write
+    case readwrite
 }
 
 infix operator <>: MultiplicationPrecedence

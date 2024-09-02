@@ -58,7 +58,7 @@ extension BluetoothPeripheralCommunicator: BluetoothPeripheralCommunicatorInputs
         log.verbose("send(data: \(data))")
         
         if case .binary(let packet) = data {
-            if let service = self.allServices.filter({ $0.value is SenderService }).first {
+            if let service = self.allServices.filter({ $0.value is SpotService }).first {
                 service.value?.packetToSend = packet
                 service.value?.send(packet: packet)
             }
@@ -80,21 +80,21 @@ extension BluetoothPeripheralCommunicator {
     
     func setupPeripheral() {
         // Create a service from the characteristic.
-        let senderService = SenderService(type: TransferService.serviceUUID, primary: true)
-        senderService.peripheralManager = peripheralManager
-        senderService.delegate = self
+        let spotService = SpotService(type: TransferService.serviceUUID, primary: true)
+        spotService.peripheralManager = peripheralManager
+        spotService.delegate = self
         
         
-        let receiverService = ReceiverService(type: TransferService.serviceUUID, primary: true)
-        receiverService.peripheralManager = peripheralManager
-        receiverService.delegate = self
+//        let receiverService = ReceiverService(type: TransferService.serviceUUID, primary: true)
+//        receiverService.peripheralManager = peripheralManager
+//        receiverService.delegate = self
         
         // And add it to the peripheral manager.
-        peripheralManager.add(senderService)
-        allServices.append(Weak<CustomService>(senderService))
+        peripheralManager.add(spotService)
+        allServices.append(Weak<CustomService>(spotService))
         
-        peripheralManager.add(receiverService)
-        allServices.append(Weak<CustomService>(receiverService))
+//        peripheralManager.add(receiverService)
+//        allServices.append(Weak<CustomService>(receiverService))
     }
     
     func finalPeripheralManager() {
@@ -110,6 +110,10 @@ extension BluetoothPeripheralCommunicator {
         log.verbose("startAdvertising")
         peripheralManager.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [TransferService.serviceUUID],
                                                CBAdvertisementDataLocalNameKey: TransferService.peripheralName])
+        
+        delegate?.didReceive(serviceInfo: TransferService.serviceUUID.uuidString)
+        delegate?.didReceive(characteristicInfo: TransferService.characteristics.map { $0.uuidString }.joined(separator: ","))
+        delegate?.didReceive(descriptorInfo: TransferService.descriptorUUID.uuidString)
         
         delegate?.didUpdate(state: .advertising)
     }
@@ -224,13 +228,21 @@ extension BluetoothPeripheralCommunicator: CBPeripheralManagerDelegate {
                 continue
             }
             
-            if let service = allServices.filter({ $0.value?.transferCharacteristic?.uuid == aRequest.characteristic.uuid }).first {
-                if service.value?.type == .write {
+            allServices.forEach { service in
+                if service.value?.rxCharacteristic?.uuid == aRequest.characteristic.uuid {
                     let packet = SpotPacket(bytes: [UInt8](requestValue)) //TODO: 데이터가 제대로 들어오는지 확인해야 함.
                     delegate?.didReceive(data: .binary(packet))
                     dataToReceive.removeAll(keepingCapacity: false)
                 }
             }
+            
+//            if let service = allServices.filter({ $0.value?.transferCharacteristic?.uuid == aRequest.characteristic.uuid }).first {
+//                if service.value?.type == .write {
+//                    let packet = SpotPacket(bytes: [UInt8](requestValue)) //TODO: 데이터가 제대로 들어오는지 확인해야 함.
+//                    delegate?.didReceive(data: .binary(packet))
+//                    dataToReceive.removeAll(keepingCapacity: false)
+//                }
+//            }
         }
     }
 }
@@ -243,7 +255,9 @@ protocol CustomServiceDelegate {
 class CustomService: CBMutableService {
     var delegate: CustomServiceDelegate?
     
-    var transferCharacteristic: CBMutableCharacteristic?
+    var rxCharacteristic: CBMutableCharacteristic?
+    var txCharacteristic: CBMutableCharacteristic?
+    
     weak var peripheralManager: CBPeripheralManager?
     weak var connectedCentral: CBCentral?
     
@@ -269,7 +283,7 @@ class CustomService: CBMutableService {
             return
         }
         
-        guard let transferCharacteristic = transferCharacteristic else {
+        guard let transferCharacteristic = txCharacteristic else {
             return
         }
         
@@ -296,7 +310,7 @@ class CustomService: CBMutableService {
             return
         }
         
-        guard let transferCharacteristic = transferCharacteristic else {
+        guard let transferCharacteristic = txCharacteristic else {
             return
         }
         
@@ -314,7 +328,7 @@ class CustomService: CBMutableService {
             return
         }
         
-        guard let transferCharacteristic = transferCharacteristic else {
+        guard let transferCharacteristic = txCharacteristic else {
             return
         }
         
@@ -376,31 +390,23 @@ class CustomService: CBMutableService {
     }
 }
 
-class SenderService: CustomService {
+class SpotService: CustomService {
     override func setUp() {
-        type = .read
+        type = .readwrite
         
-        let characteristic = CBMutableCharacteristic(type: TransferService.serverRxCharacteristicUUID,
-                                                     properties: [.read, .notify],
-                                                     value: nil,
-                                                     permissions: [.readable, .readEncryptionRequired])
-        transferCharacteristic = characteristic
-        // Add the characteristic to the service.
-        characteristics = [characteristic]
+        let txCharacteristic = CBMutableCharacteristic(type: TransferService.serverRxCharacteristicUUID,
+                                                       properties: [.read, .notify],
+                                                       value: nil,
+                                                       permissions: [.readable, .readEncryptionRequired])
         
-    }
-}
-
-class ReceiverService: CustomService {
-    override func setUp() {
-        type = .write
+        let rxCharacteristic = CBMutableCharacteristic(type: TransferService.serverTxCharacteristicUUID,
+                                                       properties: [.write, .writeWithoutResponse],
+                                                       value: nil,
+                                                       permissions: [.writeable, .writeEncryptionRequired])
         
-        let characteristic = CBMutableCharacteristic(type: TransferService.serverTxCharacteristicUUID,
-                                                     properties: [.write, .writeWithoutResponse],
-                                                     value: nil,
-                                                     permissions: [.writeable, .writeEncryptionRequired])
-        transferCharacteristic = characteristic
-        // Add the characteristic to the service.
-        characteristics = [characteristic]
+        self.rxCharacteristic = rxCharacteristic
+        self.txCharacteristic = txCharacteristic
+        
+        characteristics = [rxCharacteristic, txCharacteristic]
     }
 }

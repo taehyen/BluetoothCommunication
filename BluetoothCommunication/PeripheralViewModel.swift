@@ -54,7 +54,7 @@ class PeripheralViewModel: NSObject, PeripheralViewModelType {
 
     override init() {
         super.init()
-        communicator.delegate = self
+        
         communicator.initPeripheralManager()
         communicator.setupPeripheral()
     }
@@ -71,11 +71,13 @@ class PeripheralViewModel: NSObject, PeripheralViewModelType {
 // MARK: - Inputs
 extension PeripheralViewModel: PeripheralViewModelInputs {
     func start() {
+        communicator.delegate = self
         communicator.startAdvertising()
     }
     
     func stop() {
         communicator.stopAdvertising()
+        communicator.finalPeripheralManager()
     }
 }
 
