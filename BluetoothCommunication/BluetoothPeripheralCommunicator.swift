@@ -394,18 +394,19 @@ class SpotService: CustomService {
     override func setUp() {
         type = .readwrite
         
-        let txCharacteristic = CBMutableCharacteristic(type: TransferService.serverRxCharacteristicUUID,
-                                                       properties: [.read, .notify],
+        let rxCharacteristic = CBMutableCharacteristic(type: TransferService.serverRxCharacteristicUUID,
+                                                       properties: [.read, .notifyEncryptionRequired, .indicateEncryptionRequired],
                                                        value: nil,
                                                        permissions: [.readable, .readEncryptionRequired])
         
-        let rxCharacteristic = CBMutableCharacteristic(type: TransferService.serverTxCharacteristicUUID,
+        let txCharacteristic = CBMutableCharacteristic(type: TransferService.serverTxCharacteristicUUID,
                                                        properties: [.write, .writeWithoutResponse],
                                                        value: nil,
                                                        permissions: [.writeable, .writeEncryptionRequired])
         
-        self.rxCharacteristic = rxCharacteristic
-        self.txCharacteristic = txCharacteristic
+        //rx, tx 자리를 바꾸는 이유는 rx가 sender app -> receive app 기준으로 고정되어있기 때문이다.
+        self.rxCharacteristic = txCharacteristic
+        self.txCharacteristic = rxCharacteristic
         
         characteristics = [rxCharacteristic, txCharacteristic]
     }
